@@ -1,0 +1,100 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Arctic Spa",
+        "description": "Set up your Arctic Spa hot tub.",
+        "data": {
+          "host": "IP Address",
+          "temperature_unit": "Temperature Unit"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the spa. Make sure it is powered on and connected to your network.",
+      "unknown": "An unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "This spa is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Arctic Spa Options",
+        "data": {
+          "temperature_unit": "Temperature Unit"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "spa": {
+        "name": "Spa"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Water Temperature"
+      },
+      "setpoint": {
+        "name": "Target Temperature"
+      },
+      "heater_status": {
+        "name": "Heater Status"
+      },
+      "filter_status": {
+        "name": "Filter Status"
+      },
+      "ph": {
+        "name": "pH Level"
+      },
+      "orp": {
+        "name": "ORP (Chlorine)"
+      }
+    },
+    "binary_sensor": {
+      "heater_active": {
+        "name": "Heater Active"
+      },
+      "connected": {
+        "name": "Connected"
+      },
+      "boost_active": {
+        "name": "Boost Active"
+      },
+      "onzen_active": {
+        "name": "Onzen Active"
+      },
+      "economy_mode": {
+        "name": "Economy Mode"
+      }
+    },
+    "switch": {
+      "lights": {
+        "name": "Lights"
+      },
+      "boost": {
+        "name": "Spa Boost"
+      },
+      "onzen_switch": {
+        "name": "Onzen"
+      }
+    },
+    "select": {
+      "pump1": {
+        "name": "Pump 1"
+      },
+      "pump2": {
+        "name": "Pump 2"
+      },
+      "pump3": {
+        "name": "Pump 3"
+      },
+      "blower1": {
+        "name": "Blower 1"
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Arctic Spa",
+        "description": "Set up your Arctic Spa hot tub.",
+        "data": {
+          "host": "IP Address",
+          "temperature_unit": "Temperature Unit"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the spa. Make sure it is powered on and connected to your network.",
+      "unknown": "An unknown error occurred."
+    },
+    "abort": {
+      "already_configured": "This spa is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Arctic Spa Options",
+        "data": {
+          "temperature_unit": "Temperature Unit"
+        }
+      }
+    }
+  }
+}

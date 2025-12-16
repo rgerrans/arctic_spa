@@ -1,0 +1,11 @@
+{
+  "domain": "arctic_spa",
+  "name": "Arctic Spa",
+  "codeowners": ["@riversen"],
+  "config_flow": true,
+  "documentation": "https://github.com/riversen/arctic_spa",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/riversen/arctic_spa/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}
