@@ -26,9 +26,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: ArcticSpaCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SelectEntity] = []
-    for i in range(1, 6):
-        entities.append(_PumpSelect(coordinator, entry, i))
+    # Pump 1 is the 3-speed circulation pump → select with Off/Low/High.
+    # Pumps 2-5 are single-speed jet pumps → controlled via switch.* only.
+    # Blowers may be variable-speed → expose select alongside the switch.
+    entities: list[SelectEntity] = [_PumpSelect(coordinator, entry, 1)]
     for i in range(1, 3):
         entities.append(_BlowerSelect(coordinator, entry, i))
     entities.append(_RdtPatternSelect(coordinator, entry))

@@ -29,9 +29,9 @@ async def async_setup_entry(
         _FoggerSwitch(coordinator, entry),
         _StopFilterAboveSwitch(coordinator, entry),
     ]
-    # Pumps 1-5 — on/off switch (turn_on cycles to HIGH; turn_off cycles to OFF).
-    # Granular off/low/high control still available via select.<pump>_speed.
-    for i in range(1, 6):
+    # Pumps 2-5 are single-speed (off/high) per Arctic Spa hardware convention.
+    # Pump 1 is the 3-speed circulation pump — controlled via select.pump_1_speed.
+    for i in range(2, 6):
         entities.append(_PumpOnOff(coordinator, entry, i))
     # Blowers 1-2
     for i in range(1, 3):
