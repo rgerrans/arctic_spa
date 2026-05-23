@@ -1,11 +1,15 @@
 {
   "domain": "arctic_spa",
   "name": "Arctic Spa",
-  "codeowners": ["@riversen"],
+  "codeowners": [
+    "@rgerrans"
+  ],
   "config_flow": true,
-  "documentation": "https://github.com/riversen/arctic_spa",
-  "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/riversen/arctic_spa/issues",
-  "requirements": [],
-  "version": "1.0.0"
+  "documentation": "https://github.com/rgerrans/arctic_spa",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/rgerrans/arctic_spa/issues",
+  "requirements": [
+    "websockets>=11.0"
+  ],
+  "version": "2.0.2"
 }

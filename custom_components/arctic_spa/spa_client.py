@@ -1,45 +1,158 @@
-"""Arctic Spa TCP/UDP Client with persistent connection."""
+"""Arctic Spa WebSocket Client (firmware 3.1.x JSON protocol over ws://<spa>:8765/)."""
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import socket
-import struct
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Optional
+
+import websockets
+from websockets.client import WebSocketClientProtocol
 
 from .const import (
-    MAGIC,
-    HEADER_SIZE,
+    ALARM_CODES,
+    BOOTSTRAP_QUERY,
+    CMD_BLOWER_NEXT,
+    CMD_FILTER_BOOST,
+    CMD_FOGGER_NEXT,
+    CMD_LIGHTS_NEXT,
+    CMD_ONZEN_NEXT,
+    CMD_OZ_PEAK_1,
+    CMD_OZ_PEAK_2,
+    CMD_PH_BOOST,
+    CMD_PUMP_NEXT,
+    CMD_RESET,
+    CMD_SB_BOOST,
+    CMD_SDS_NEXT,
+    CMD_SET_FD,
+    CMD_SET_FF,
+    CMD_SET_FS,
+    CMD_SET_SB_HRS,
+    CMD_SET_TSP,
+    CMD_YESS_NEXT,
+    CONST_TSP_MAX,
+    CONST_TSP_MIN,
+    DEFAULT_MAX_TEMP_F,
+    DEFAULT_MIN_TEMP_F,
     DEFAULT_PORT,
-    UDP_SEND_PORT,
-    UDP_RECV_PORT,
-    UDP_QUERY_MSG,
-    MsgType,
-    PumpStatus,
-    HeaterStatus,
+    ERROR_CODES,
     FilterStatus,
-    LiveField,
-    CmdField,
+    HeaterStatus,
+    LIVE_ALL_ON,
+    LIVE_BLOWER,
+    LIVE_CURRENT,
+    LIVE_ECON,
+    LIVE_FAN,
+    LIVE_FILTER,
+    LIVE_FOGGER,
+    LIVE_HEATER,
+    LIVE_HTEMP,
+    LIVE_LIGHTS,
+    LIVE_ONZEN,
+    LIVE_OZONE,
+    LIVE_PHSM,
+    LIVE_PUMP,
+    LIVE_SB_BOOST,
+    LIVE_SB_I1,
+    LIVE_SB_I2,
+    LIVE_SB_ORP,
+    LIVE_SB_ORP_IND,
+    LIVE_SB_PH,
+    LIVE_SB_PH_IND,
+    LIVE_SB_PRODUCING,
+    LIVE_SB_STAT,
+    LIVE_SB_TEMP,
+    LIVE_SB_VIN,
+    LIVE_SB_VOUT,
+    LIVE_SB_WEAR,
+    LIVE_SBSM,
+    LIVE_SDS,
+    LIVE_TEMP,
+    LIVE_YESS,
+    PumpStatus,
+    RECONNECT_DELAY,
+    SETT_CFG_BLOWER,
+    SETT_CFG_FG,
+    SETT_CFG_HEATER,
+    SETT_CFG_LIGHTS,
+    SETT_CFG_ON,
+    SETT_CFG_PUMP,
+    SETT_CFG_SB,
+    SETT_CFG_SDS,
+    SETT_CFG_YESS,
+    SETT_FD_READ,
+    SETT_FF_READ,
+    SETT_FS_READ,
+    SETT_FW_LPC,
+    SETT_FW_SB,
+    SETT_FW_YOC,
+    SETT_RDT_BLUE,
+    SETT_RDT_BRIGHT,
+    SETT_RDT_GREEN,
+    SETT_RDT_PATTERN,
+    SETT_RDT_RED,
+    SETT_SB_HR_READ,
+    SETT_SB_ORP_HI,
+    SETT_SB_ORP_LO,
+    SETT_SB_PH_HI,
+    SETT_SB_PH_LO,
+    SETT_SPA_SERIAL,
+    SETT_TAG1,
+    SETT_TAG2,
+    SETT_TSP_READ,
+    SMARTPH_LABELS,
+    SPA_ERROR_LABELS,
+    SPA_STATUS_LABELS,
+    WS_PATH,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# Keepalive interval in seconds
-KEEPALIVE_INTERVAL = 30
-# Reconnect delay in seconds
-RECONNECT_DELAY = 5
-# Connection timeout
 CONNECT_TIMEOUT = 10
-# Max reconnect attempts before giving up temporarily
-MAX_RECONNECT_ATTEMPTS = 3
+PING_INTERVAL = 20
+PING_TIMEOUT = 10
+
+
+def _pump_level(raw: Any) -> PumpStatus:
+    """Map raw pump value to off/low/high (per Customer Portal pumpLevel())."""
+    try:
+        v = int(raw or 0)
+    except (TypeError, ValueError):
+        return PumpStatus.OFF
+    if v > 15:
+        return PumpStatus.HIGH
+    if v > 0:
+        return PumpStatus.LOW
+    return PumpStatus.OFF
+
+
+def _bool(raw: Any) -> bool:
+    try:
+        return bool(int(raw or 0))
+    except (TypeError, ValueError):
+        return bool(raw)
+
+
+def _int(raw: Any, default: int = 0) -> int:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _float(raw: Any, default: float = 0.0) -> float:
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass
 class SpaStatus:
-    """Spa status data."""
-    
+    """Aggregate spa state across live / sett / const / error topics."""
+
     temperature_f: int = 0
     setpoint_f: int = 0
     pump1: PumpStatus = PumpStatus.OFF
@@ -47,272 +160,222 @@ class SpaStatus:
     pump3: PumpStatus = PumpStatus.OFF
     pump4: PumpStatus = PumpStatus.OFF
     pump5: PumpStatus = PumpStatus.OFF
+    pump_raw: list[int] = field(default_factory=lambda: [0, 0, 0, 0, 0])
     blower1: PumpStatus = PumpStatus.OFF
     blower2: PumpStatus = PumpStatus.OFF
+    blower_raw: list[int] = field(default_factory=lambda: [0, 0])
     lights: bool = False
-    stereo: bool = False
     heater1: HeaterStatus = HeaterStatus.IDLE
     heater2: HeaterStatus = HeaterStatus.IDLE
     filter_status: FilterStatus = FilterStatus.IDLE
     onzen: bool = False
     ozone: bool = False
-    economy: bool = False
-    all_on: bool = False
+    fan: bool = False
+    fogger: bool = False
     sds: bool = False
     yess: bool = False
-    error: int = 0
-    alarm: int = 0
-    ph: int = 0
-    orp: int = 0
+    economy: bool = False
+    all_on: bool = False
+    current_draw: int = 0
+    heater_temp: int = 0
+    # Error/status (rebuilt from ERR0..ERR63 / STAT0..STAT63 boolean dict)
+    error: int = 0  # first active labeled ERR index, 0 = none
+    alarm: int = 0  # first active labeled STAT index, 0 = none
+    active_errors: list[int] = field(default_factory=list)
+    active_statuses: list[int] = field(default_factory=list)
+    # State machines
+    smartph_state: int = 0
+    spaboy_state_machine: int = 0
+    # Filter accessory state
+    filter_tag1: bool = False
+    filter_tag2: bool = False
+    filter_stop_above_3: bool = False  # FS — stop filtering 3F above setpoint
+
+    # SpaBoy (Onzen chlorinator)
+    sb_present: bool = False
+    sb_temp_f: int = 0
+    sb_voltage_in: float = 0.0
+    sb_voltage_out: float = 0.0
+    sb_current_1: float = 0.0
+    sb_current_2: float = 0.0
+    sb_ph: int = 0
+    sb_orp: int = 0
+    sb_status: int = 0
+    sb_ph_indicator: int = 0
+    sb_orp_indicator: int = 0
+    sb_wear_pct: int = 0
+    sb_producing: bool = False
+    sb_boost: bool = False
+
+    # Settings + config flags
+    spa_serial: str = ""
+    fw_yoc: str = ""
+    fw_lpc: str = ""
+    fw_sb: str = ""
+    filter_frequency: int = 0
+    filter_duration: int = 0
+    spaboy_hours_per_day: int = 0
+    cfg_pump: list[bool] = field(default_factory=lambda: [False] * 5)
+    cfg_blower: list[bool] = field(default_factory=lambda: [False] * 2)
+    cfg_lights: bool = False
+    cfg_heater: list[bool] = field(default_factory=lambda: [False] * 2)
+    cfg_spaboy: bool = False
+    cfg_fogger: bool = False
+    cfg_sds: bool = False
+    cfg_yess: bool = False
+    cfg_onzen: bool = False
+
+    # RGB Lights (RDT)
+    rdt_red: int = 0
+    rdt_green: int = 0
+    rdt_blue: int = 0
+    rdt_brightness: int = 0
+    rdt_pattern: int = 0
+
+    # SpaBoy chemistry setpoint bands
+    sb_orp_hi: int = 0
+    sb_orp_lo: int = 0
+    sb_ph_hi: int = 0
+    sb_ph_lo: int = 0
+
+    # Const-topic bounds (dynamic min/max from spa)
+    setpoint_min_f: int = DEFAULT_MIN_TEMP_F
+    setpoint_max_f: int = DEFAULT_MAX_TEMP_F
+
     connected: bool = False
-    last_update: datetime | None = None
-    
-    # Energy tracking
+    last_update: Optional[datetime] = None
     energy_kwh: float = 0.0
-    _last_energy_update: datetime | None = None
-
-    # Error code descriptions (from Arctic Spas documentation)
-    ERROR_CODES = {
-        0: "No Error",
-        1: "Temperature Sensor A Fault",
-        2: "Temperature Sensor B Fault",
-        3: "Water Temperature Too Hot",
-        4: "Water Temperature Too Cold",
-        5: "Flow Switch Error",
-        6: "Dry Fire Protection",
-        7: "GFCI Trip",
-        8: "Heater Fault",
-        9: "Communication Error",
-        10: "Sensor Sync Error",
-    }
-
-    ALARM_CODES = {
-        0: "No Alarm",
-        1: "Water Flow Alarm",
-        2: "High Temperature Alarm",
-        3: "Heater Alarm",
-        4: "Sensor Alarm",
-    }
+    _last_energy_update: Optional[datetime] = None
 
     @property
     def temperature_c(self) -> float:
-        """Get temperature in Celsius, rounded to nearest 0.5."""
         c = (self.temperature_f - 32) * 5 / 9
-        return round(c * 2) / 2  # Round to nearest 0.5
+        return round(c * 2) / 2
 
     @property
     def setpoint_c(self) -> float:
-        """Get setpoint in Celsius, rounded to nearest 0.5."""
         c = (self.setpoint_f - 32) * 5 / 9
-        return round(c * 2) / 2  # Round to nearest 0.5
+        return round(c * 2) / 2
 
     @property
     def heater_active(self) -> bool:
-        """Check if any heater is actively heating."""
-        return self.heater1 in (HeaterStatus.WARMUP, HeaterStatus.HEATING) or \
-               self.heater2 in (HeaterStatus.WARMUP, HeaterStatus.HEATING)
+        active = (HeaterStatus.WARMUP, HeaterStatus.HEATING)
+        return self.heater1 in active or self.heater2 in active
 
     @property
     def filter_boost_active(self) -> bool:
-        """Check if filter boost is active."""
         return self.filter_status == FilterStatus.BOOST
 
     @property
-    def error_message(self) -> str:
-        """Get human-readable error message."""
-        return self.ERROR_CODES.get(self.error, f"Unknown Error ({self.error})")
-
-    @property
-    def alarm_message(self) -> str:
-        """Get human-readable alarm message."""
-        return self.ALARM_CODES.get(self.alarm, f"Unknown Alarm ({self.alarm})")
-
-    @property
     def has_error(self) -> bool:
-        """Check if there's an active error."""
-        return self.error != 0
+        return bool(self.active_errors)
 
     @property
     def has_alarm(self) -> bool:
-        """Check if there's an active alarm."""
-        return self.alarm != 0
+        return bool(self.active_statuses)
+
+    @property
+    def error_message(self) -> str:
+        if not self.active_errors:
+            return "No Error"
+        return ", ".join(SPA_ERROR_LABELS.get(i, f"ERR{i}") for i in self.active_errors)
+
+    @property
+    def alarm_message(self) -> str:
+        if not self.active_statuses:
+            return "No Alarm"
+        return ", ".join(SPA_STATUS_LABELS.get(i, f"STAT{i}") for i in self.active_statuses)
+
+    @property
+    def smartph_state_label(self) -> str:
+        return SMARTPH_LABELS.get(self.smartph_state, f"State {self.smartph_state}")
+
+    @property
+    def filter_run_hours_per_day(self) -> int:
+        return self.filter_frequency * self.filter_duration
 
     @property
     def estimated_power_watts(self) -> int:
-        """Estimate current power consumption in watts."""
-        # Power constants (measured values)
-        HEATER_HEATING_WATTS = 6500   # Full heating (includes Pump 1 Low)
-        HEATER_WARMUP_WATTS = 350     # Heater warming up
-        HEATER_COOLDOWN_WATTS = 350   # Heater cooling down
-        PUMP_HIGH_WATTS = 1700        # Pump 1/2/3 on High
-        PUMP_LOW_WATTS = 370          # Pump 1 Low only
-        IDLE_WATTS = 15               # Electronics standby
-        
+        HEATER_HEATING_WATTS = 6500
+        HEATER_WARMUP_WATTS = 350
+        HEATER_COOLDOWN_WATTS = 350
+        PUMP_HIGH_WATTS = 1700
+        PUMP_LOW_WATTS = 370
+        IDLE_WATTS = 15
+
         power = IDLE_WATTS
-        
-        # Count high-speed pumps
-        high_pumps = sum([
-            1 if self.pump1 == PumpStatus.HIGH else 0,
-            1 if self.pump2 == PumpStatus.HIGH else 0,
-            1 if self.pump3 == PumpStatus.HIGH else 0,
-        ])
-        
+        high_pumps = sum(1 for p in (self.pump1, self.pump2, self.pump3) if p == PumpStatus.HIGH)
+
         if high_pumps > 0:
-            # High power mode - heater is load-shed when pumps are on high
             power = high_pumps * PUMP_HIGH_WATTS
         elif self.heater1 == HeaterStatus.HEATING:
-            # Full heating mode (includes circulation pump)
             power = HEATER_HEATING_WATTS
         elif self.heater1 == HeaterStatus.WARMUP:
-            # Heater warming up
             power = HEATER_WARMUP_WATTS
         elif self.heater1 == HeaterStatus.COOLDOWN:
-            # Heater cooling down
             power = HEATER_COOLDOWN_WATTS
         elif self.pump1 == PumpStatus.LOW:
-            # Circulation mode only
             power = PUMP_LOW_WATTS
-        
-        # Add blower if running
+
         if self.blower1 != PumpStatus.OFF:
-            power += 500  # Approximate blower power
-            
+            power += 500
         return power
 
     def update_energy(self) -> None:
-        """Update cumulative energy based on current power and elapsed time."""
         now = datetime.now()
-        
         if self._last_energy_update is not None:
-            # Calculate time elapsed in hours
-            elapsed_hours = (now - self._last_energy_update).total_seconds() / 3600.0
-            # Add energy: kWh = kW * hours
-            power_kw = self.estimated_power_watts / 1000.0
-            self.energy_kwh += power_kw * elapsed_hours
-        
+            elapsed_h = (now - self._last_energy_update).total_seconds() / 3600.0
+            self.energy_kwh += (self.estimated_power_watts / 1000.0) * elapsed_h
         self._last_energy_update = now
 
 
 class ArcticSpaClient:
-    """Client for communicating with Arctic Spa with persistent connection."""
+    """WebSocket client for Arctic Spa (firmware 3.1.x)."""
 
     def __init__(self, host: str, port: int = DEFAULT_PORT) -> None:
-        """Initialize the client."""
         self.host = host
         self.port = port
-        self._reader: asyncio.StreamReader | None = None
-        self._writer: asyncio.StreamWriter | None = None
+        self._url = f"ws://{host}:{port}{WS_PATH}"
+        self._ws: Optional[WebSocketClientProtocol] = None
         self._status = SpaStatus()
-        self._lock = asyncio.Lock()
-        self._listener_task: asyncio.Task | None = None
-        self._keepalive_task: asyncio.Task | None = None
+        self._send_lock = asyncio.Lock()
+        self._listener_task: Optional[asyncio.Task] = None
         self._running = False
-        self._reconnect_attempts = 0
         self._state_callbacks: list[Callable[[], None]] = []
 
     @property
     def status(self) -> SpaStatus:
-        """Get current spa status."""
         return self._status
 
     @property
     def connected(self) -> bool:
-        """Check if connected."""
-        return self._status.connected and self._writer is not None
+        return self._status.connected and self._ws is not None
 
     def register_state_callback(self, callback: Callable[[], None]) -> None:
-        """Register a callback for state changes."""
         if callback not in self._state_callbacks:
             self._state_callbacks.append(callback)
 
     def unregister_state_callback(self, callback: Callable[[], None]) -> None:
-        """Unregister a state callback."""
         if callback in self._state_callbacks:
             self._state_callbacks.remove(callback)
 
-    def _notify_state_change(self) -> None:
-        """Notify all registered callbacks of state change."""
-        for callback in self._state_callbacks:
+    def _notify(self) -> None:
+        for cb in self._state_callbacks:
             try:
-                callback()
-            except Exception as err:
-                _LOGGER.error("Error in state callback: %s", err)
-
-    async def _wake_udp(self) -> bool:
-        """Send UDP wake-up packet to spa."""
-        loop = asyncio.get_event_loop()
-        
-        try:
-            # Create UDP socket for sending
-            send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            send_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            send_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            send_sock.setblocking(False)
-
-            # Send to specific host
-            await loop.sock_sendto(send_sock, UDP_QUERY_MSG, (self.host, UDP_SEND_PORT))
-            _LOGGER.debug("Sent UDP wake to %s:%d", self.host, UDP_SEND_PORT)
-            
-            # Also send broadcast
-            try:
-                await loop.sock_sendto(send_sock, UDP_QUERY_MSG, ("255.255.255.255", UDP_SEND_PORT))
-            except Exception:
-                pass
-            
-            send_sock.close()
-
-            # Try to receive response (optional, spa may not respond)
-            recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            recv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            recv_sock.setblocking(False)
-            
-            try:
-                recv_sock.bind(('', UDP_RECV_PORT))
-                data = await asyncio.wait_for(
-                    loop.sock_recv(recv_sock, 256),
-                    timeout=2.0
-                )
-                _LOGGER.debug("UDP response: %s", data)
-            except (asyncio.TimeoutError, OSError):
-                pass
-            finally:
-                recv_sock.close()
-
-            return True
-
-        except Exception as err:
-            _LOGGER.warning("UDP wake failed: %s", err)
-            return False
+                cb()
+            except Exception as err:  # pragma: no cover
+                _LOGGER.error("state callback raised: %s", err)
 
     async def async_start(self) -> bool:
-        """Start the client with persistent connection."""
         if self._running:
             return True
-        
         self._running = True
-        self._reconnect_attempts = 0
-        
-        success = await self._connect()
-        if success:
-            # Start background tasks
-            self._listener_task = asyncio.create_task(self._listener_loop())
-            self._keepalive_task = asyncio.create_task(self._keepalive_loop())
-        
-        return success
+        ok = await self._connect_once()
+        self._listener_task = asyncio.create_task(self._supervise())
+        return ok
 
     async def async_stop(self) -> None:
-        """Stop the client and disconnect."""
         self._running = False
-        
-        # Cancel background tasks
-        if self._keepalive_task:
-            self._keepalive_task.cancel()
-            try:
-                await self._keepalive_task
-            except asyncio.CancelledError:
-                pass
-            self._keepalive_task = None
-        
         if self._listener_task:
             self._listener_task.cancel()
             try:
@@ -320,419 +383,393 @@ class ArcticSpaClient:
             except asyncio.CancelledError:
                 pass
             self._listener_task = None
-        
-        await self._disconnect()
+        await self._close_ws()
 
-    async def _connect(self) -> bool:
-        """Establish connection to spa."""
-        async with self._lock:
+    async def _close_ws(self) -> None:
+        ws = self._ws
+        self._ws = None
+        self._status.connected = False
+        if ws is not None:
             try:
-                # Wake up spa with UDP
-                await self._wake_udp()
-                await asyncio.sleep(0.5)
-                
-                # Connect TCP
-                _LOGGER.info("Connecting to spa at %s:%d", self.host, self.port)
-                self._reader, self._writer = await asyncio.wait_for(
-                    asyncio.open_connection(self.host, self.port),
-                    timeout=CONNECT_TIMEOUT
-                )
-                
-                self._status.connected = True
-                self._reconnect_attempts = 0
-                _LOGGER.info("Connected to spa")
-                
-                # Send initial requests to get state
-                await self._send_packet(MsgType.INFO)
-                await asyncio.sleep(0.1)
-                await self._send_packet(MsgType.LIVE)
-                await asyncio.sleep(0.1)
-                await self._send_packet(MsgType.CONFIG)
-                await asyncio.sleep(0.1)
-                await self._send_packet(MsgType.ONZEN_LIVE)  # Request SpaBoy data
-                
-                return True
-                
-            except Exception as err:
-                _LOGGER.error("Failed to connect to spa: %s", err)
-                self._status.connected = False
-                self._reader = None
-                self._writer = None
-                return False
+                await ws.close()
+            except Exception:
+                pass
 
-    async def _disconnect(self) -> None:
-        """Disconnect from spa."""
-        async with self._lock:
-            if self._writer:
-                try:
-                    self._writer.close()
-                    await self._writer.wait_closed()
-                except Exception:
-                    pass
-            self._reader = None
-            self._writer = None
-            self._status.connected = False
-            _LOGGER.info("Disconnected from spa")
-
-    async def _reconnect(self) -> bool:
-        """Attempt to reconnect to spa."""
-        if not self._running:
-            return False
-        
-        self._reconnect_attempts += 1
-        
-        if self._reconnect_attempts > MAX_RECONNECT_ATTEMPTS:
-            _LOGGER.warning(
-                "Max reconnect attempts (%d) reached, waiting longer",
-                MAX_RECONNECT_ATTEMPTS
-            )
-            await asyncio.sleep(RECONNECT_DELAY * 3)
-            self._reconnect_attempts = 0
-        
-        _LOGGER.info("Attempting reconnect (attempt %d)", self._reconnect_attempts)
-        await self._disconnect()
-        await asyncio.sleep(RECONNECT_DELAY)
-        
-        return await self._connect()
-
-    async def _listener_loop(self) -> None:
-        """Background task that listens for incoming data."""
-        buffer = b''
-        
-        while self._running:
-            try:
-                if not self._reader or not self._status.connected:
-                    await asyncio.sleep(1)
-                    continue
-                
-                # Read data with timeout
-                try:
-                    data = await asyncio.wait_for(
-                        self._reader.read(4096),
-                        timeout=KEEPALIVE_INTERVAL + 10
-                    )
-                except asyncio.TimeoutError:
-                    _LOGGER.warning("Read timeout, checking connection")
-                    continue
-                
-                if not data:
-                    _LOGGER.warning("Connection closed by spa")
-                    self._status.connected = False
-                    await self._reconnect()
-                    continue
-                
-                buffer += data
-                
-                # Parse packets from buffer
-                while len(buffer) >= HEADER_SIZE:
-                    # Find magic
-                    if buffer[:4] != struct.pack('>I', MAGIC):
-                        idx = buffer.find(struct.pack('>I', MAGIC))
-                        if idx > 0:
-                            buffer = buffer[idx:]
-                        else:
-                            buffer = b''
-                            break
-                        continue
-                    
-                    # Parse header
-                    _, _, _, _, pkt_type, size = struct.unpack(
-                        '>IIIIHH', buffer[:HEADER_SIZE]
-                    )
-                    
-                    # Check if we have full packet
-                    if len(buffer) < HEADER_SIZE + size:
-                        break
-                    
-                    # Extract payload
-                    payload = buffer[HEADER_SIZE:HEADER_SIZE + size]
-                    buffer = buffer[HEADER_SIZE + size:]
-                    
-                    # Process packet
-                    await self._process_packet(pkt_type, payload)
-                    
-            except asyncio.CancelledError:
-                break
-            except Exception as err:
-                _LOGGER.error("Error in listener loop: %s", err)
-                if self._running:
-                    await self._reconnect()
-
-    async def _keepalive_loop(self) -> None:
-        """Background task that sends keepalive requests."""
-        while self._running:
-            try:
-                await asyncio.sleep(KEEPALIVE_INTERVAL)
-                
-                if not self._status.connected:
-                    continue
-                
-                # Send LIVE request as keepalive
-                _LOGGER.debug("Sending keepalive LIVE request")
-                async with self._lock:
-                    if self._writer:
-                        await self._send_packet(MsgType.LIVE)
-                        await self._send_packet(MsgType.ONZEN_LIVE)  # Also refresh SpaBoy
-                        
-            except asyncio.CancelledError:
-                break
-            except Exception as err:
-                _LOGGER.error("Error in keepalive loop: %s", err)
-
-    async def _process_packet(self, pkt_type: int, payload: bytes) -> None:
-        """Process received packet."""
-        type_name = MsgType(pkt_type).name if pkt_type in MsgType._value2member_map_ else f"TYPE_{pkt_type}"
-        _LOGGER.debug("Received %s (%d bytes)", type_name, len(payload))
-        
-        if pkt_type == MsgType.LIVE and payload:
-            self._parse_live_data(payload)
-            self._notify_state_change()
-        elif pkt_type == MsgType.ONZEN_LIVE and payload:
-            self._parse_onzen_live_data(payload)
-            self._notify_state_change()
-
-    def _make_packet(self, msg_type: int, payload: bytes = b'') -> bytes:
-        """Create a packet with header."""
-        return struct.pack('>IIIIHH', MAGIC, 0, 0, 0, msg_type, len(payload)) + payload
-
-    def _encode_varint(self, value: int) -> bytes:
-        """Encode a value as varint."""
-        result = []
-        while value > 127:
-            result.append((value & 0x7F) | 0x80)
-            value >>= 7
-        result.append(value)
-        return bytes(result)
-
-    def _encode_field(self, field_num: int, value: int) -> bytes:
-        """Encode a protobuf field."""
-        tag = (field_num << 3) | 0
-        return self._encode_varint(tag) + self._encode_varint(value)
-
-    def _decode_varint(self, data: bytes, offset: int) -> tuple[int, int]:
-        """Decode a varint from data at offset."""
-        value = 0
-        shift = 0
-        while offset < len(data):
-            b = data[offset]
-            offset += 1
-            value |= (b & 0x7F) << shift
-            if not (b & 0x80):
-                break
-            shift += 7
-        return value, offset
-
-    def _parse_live_data(self, data: bytes) -> None:
-        """Parse live status protobuf data."""
-        offset = 0
-        while offset < len(data):
-            try:
-                tag = data[offset]
-                offset += 1
-                field_num = tag >> 3
-                wire_type = tag & 0x07
-                
-                if wire_type == 0:  # Varint
-                    value, offset = self._decode_varint(data, offset)
-                    
-                    if field_num == LiveField.TEMP:
-                        self._status.temperature_f = value
-                    elif field_num == LiveField.SETPOINT:
-                        self._status.setpoint_f = value
-                    elif field_num == LiveField.PUMP1:
-                        self._status.pump1 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.PUMP2:
-                        self._status.pump2 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.PUMP3:
-                        self._status.pump3 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.PUMP4:
-                        self._status.pump4 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.PUMP5:
-                        self._status.pump5 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.BLOWER1:
-                        self._status.blower1 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.BLOWER2:
-                        self._status.blower2 = PumpStatus(min(value, 2))
-                    elif field_num == LiveField.LIGHTS:
-                        self._status.lights = bool(value)
-                    elif field_num == LiveField.STEREO:
-                        self._status.stereo = bool(value)
-                    elif field_num == LiveField.HEATER1:
-                        self._status.heater1 = HeaterStatus(min(value, 3))
-                    elif field_num == LiveField.HEATER2:
-                        self._status.heater2 = HeaterStatus(min(value, 3))
-                    elif field_num == LiveField.FILTER:
-                        self._status.filter_status = FilterStatus(min(value, 7))
-                    elif field_num == LiveField.ONZEN:
-                        self._status.onzen = bool(value)
-                    elif field_num == LiveField.OZONE:
-                        self._status.ozone = bool(value)
-                    elif field_num == LiveField.ECONOMY:
-                        self._status.economy = bool(value)
-                    elif field_num == LiveField.ALL_ON:
-                        self._status.all_on = bool(value)
-                    elif field_num == LiveField.ERROR:
-                        self._status.error = value
-                    elif field_num == LiveField.ALARM:
-                        self._status.alarm = value
-                    elif field_num == LiveField.PH:
-                        self._status.ph = value
-                    elif field_num == LiveField.ORP:
-                        self._status.orp = value
-                    elif field_num == LiveField.SDS:
-                        self._status.sds = bool(value)
-                    elif field_num == LiveField.YESS:
-                        self._status.yess = bool(value)
-                else:
-                    break
-                    
-            except Exception as err:
-                _LOGGER.debug("Error parsing live data: %s", err)
-                break
-        
-        self._status.last_update = datetime.now()
-        self._status.update_energy()  # Update cumulative energy tracking
-        _LOGGER.debug(
-            "Status: temp=%d°F, setpoint=%d°F, lights=%s, pump1=%s, heater=%s",
-            self._status.temperature_f,
-            self._status.setpoint_f,
-            self._status.lights,
-            self._status.pump1.name,
-            self._status.heater1.name,
-        )
-
-    def _parse_onzen_live_data(self, data: bytes) -> None:
-        """Parse Onzen/SpaBoy live data (Type 48) for pH and ORP."""
-        offset = 0
-        while offset < len(data):
-            try:
-                tag = data[offset]
-                offset += 1
-                field_num = tag >> 3
-                wire_type = tag & 0x07
-                
-                if wire_type == 0:  # Varint
-                    value, offset = self._decode_varint(data, offset)
-                    
-                    # Field 2 = ORP (raw mV value)
-                    if field_num == 2:
-                        self._status.orp = value
-                        _LOGGER.debug("SpaBoy ORP: %d mV", value)
-                    # Field 3 = pH (divide by 100 for actual value)
-                    elif field_num == 3:
-                        self._status.ph = value
-                        _LOGGER.debug("SpaBoy pH raw: %d (%.2f)", value, value / 100.0)
-                        
-                elif wire_type == 2:  # Length-delimited (string/bytes)
-                    length, offset = self._decode_varint(data, offset)
-                    offset += length
-                else:
-                    # Skip unknown wire types
-                    break
-                    
-            except Exception as err:
-                _LOGGER.debug("Error parsing onzen live data: %s", err)
-                break
-
-    async def _send_packet(self, msg_type: int, payload: bytes = b'') -> bool:
-        """Send a packet (must be called with lock held or from single task)."""
-        if not self._writer:
-            return False
-        
+    async def _connect_once(self) -> bool:
         try:
-            packet = self._make_packet(msg_type, payload)
-            self._writer.write(packet)
-            await self._writer.drain()
-            return True
+            _LOGGER.info("Connecting to spa WebSocket %s", self._url)
+            ws = await asyncio.wait_for(
+                websockets.connect(
+                    self._url,
+                    ping_interval=PING_INTERVAL,
+                    ping_timeout=PING_TIMEOUT,
+                    open_timeout=CONNECT_TIMEOUT,
+                    max_size=1_000_000,
+                ),
+                timeout=CONNECT_TIMEOUT,
+            )
         except Exception as err:
-            _LOGGER.error("Error sending packet: %s", err)
-            self._status.connected = False
+            _LOGGER.warning("Spa WS connect failed: %s", err)
             return False
 
-    async def async_send_command(self, payload: bytes) -> bool:
-        """Send a command to the spa."""
-        async with self._lock:
-            if not self._status.connected:
-                _LOGGER.error("Not connected to spa")
+        self._ws = ws
+        self._status.connected = True
+        try:
+            await ws.send(json.dumps(BOOTSTRAP_QUERY))
+        except Exception as err:
+            _LOGGER.warning("Spa WS bootstrap send failed: %s", err)
+            await self._close_ws()
+            return False
+        _LOGGER.info("Spa WS connected; bootstrap sent")
+        self._notify()
+        return True
+
+    async def _supervise(self) -> None:
+        """Listen + auto-reconnect loop."""
+        while self._running:
+            if self._ws is None:
+                if not await self._connect_once():
+                    await asyncio.sleep(RECONNECT_DELAY)
+                    continue
+            try:
+                async for raw in self._ws:
+                    self._handle_raw(raw)
+            except websockets.ConnectionClosed as err:
+                _LOGGER.info("Spa WS closed (code=%s); will reconnect", getattr(err, "code", "?"))
+            except asyncio.CancelledError:
+                break
+            except Exception as err:  # pragma: no cover
+                _LOGGER.warning("Spa WS listener error: %s", err)
+            await self._close_ws()
+            if self._running:
+                await asyncio.sleep(RECONNECT_DELAY)
+
+    def _handle_raw(self, raw: Any) -> None:
+        if isinstance(raw, (bytes, bytearray)):
+            try:
+                raw = raw.decode("utf-8")
+            except Exception:
+                return
+        try:
+            msg = json.loads(raw)
+        except json.JSONDecodeError:
+            _LOGGER.debug("non-JSON frame ignored: %r", raw[:80])
+            return
+
+        if "command" in msg:
+            _LOGGER.debug("server command: %s", msg)
+            return
+
+        topic = msg.get("topic")
+        data = msg.get("data")
+        if not topic or data is None:
+            return
+        try:
+            if topic == "live":
+                self._apply_live(data)
+            elif topic == "sett":
+                self._apply_settings(data)
+            elif topic == "const":
+                self._apply_const(data)
+            elif topic == "error":
+                self._apply_error(data)
+            elif topic == "status":
+                pass  # advisory; not surfaced as entity
+            elif topic == "update-status":
+                pass  # firmware update progress; could be surfaced later
+            else:
+                _LOGGER.debug("unhandled topic: %s", topic)
+                return
+        except Exception as err:  # pragma: no cover
+            _LOGGER.warning("error applying topic=%s: %s", topic, err)
+            return
+        self._status.last_update = datetime.now()
+        self._status.update_energy()
+        self._notify()
+
+    def _apply_live(self, d: dict) -> None:
+        s = self._status
+        if LIVE_TEMP in d:
+            s.temperature_f = _int(d[LIVE_TEMP])
+        for i, key in enumerate(LIVE_PUMP):
+            if key in d:
+                raw = _int(d[key])
+                s.pump_raw[i] = raw
+                level = _pump_level(raw)
+                if i == 0: s.pump1 = level
+                elif i == 1: s.pump2 = level
+                elif i == 2: s.pump3 = level
+                elif i == 3: s.pump4 = level
+                elif i == 4: s.pump5 = level
+        for i, key in enumerate(LIVE_BLOWER):
+            if key in d:
+                raw = _int(d[key])
+                s.blower_raw[i] = raw
+                level = _pump_level(raw)
+                if i == 0: s.blower1 = level
+                else: s.blower2 = level
+        if LIVE_LIGHTS in d:
+            s.lights = _bool(d[LIVE_LIGHTS])
+        for i, key in enumerate(LIVE_HEATER):
+            if key in d:
+                try:
+                    hs = HeaterStatus(min(_int(d[key]), 3))
+                except ValueError:
+                    hs = HeaterStatus.IDLE
+                if i == 0: s.heater1 = hs
+                else: s.heater2 = hs
+        if LIVE_FILTER in d:
+            try:
+                s.filter_status = FilterStatus(min(_int(d[LIVE_FILTER]), 7))
+            except ValueError:
+                s.filter_status = FilterStatus.IDLE
+        if LIVE_OZONE in d: s.ozone = _bool(d[LIVE_OZONE])
+        if LIVE_ONZEN in d: s.onzen = _bool(d[LIVE_ONZEN])
+        if LIVE_FAN in d: s.fan = _bool(d[LIVE_FAN])
+        if LIVE_FOGGER in d: s.fogger = _bool(d[LIVE_FOGGER])
+        if LIVE_SDS in d: s.sds = _bool(d[LIVE_SDS])
+        if LIVE_YESS in d: s.yess = _bool(d[LIVE_YESS])
+        if LIVE_ECON in d: s.economy = _bool(d[LIVE_ECON])
+        if LIVE_ALL_ON in d: s.all_on = _bool(d[LIVE_ALL_ON])
+        if LIVE_CURRENT in d: s.current_draw = _int(d[LIVE_CURRENT])
+        if LIVE_HTEMP in d: s.heater_temp = _int(d[LIVE_HTEMP])
+        if LIVE_PHSM in d: s.smartph_state = _int(d[LIVE_PHSM])
+        if LIVE_SBSM in d: s.spaboy_state_machine = _int(d[LIVE_SBSM])
+
+        if LIVE_SB_TEMP in d: s.sb_temp_f = _int(d[LIVE_SB_TEMP])
+        if LIVE_SB_VIN in d:
+            s.sb_voltage_in = _float(d[LIVE_SB_VIN])
+            s.sb_present = True
+        if LIVE_SB_VOUT in d: s.sb_voltage_out = _float(d[LIVE_SB_VOUT])
+        if LIVE_SB_I1 in d: s.sb_current_1 = _float(d[LIVE_SB_I1])
+        if LIVE_SB_I2 in d: s.sb_current_2 = _float(d[LIVE_SB_I2])
+        if LIVE_SB_PH in d: s.sb_ph = _int(d[LIVE_SB_PH])
+        if LIVE_SB_ORP in d: s.sb_orp = _int(d[LIVE_SB_ORP])
+        if LIVE_SB_STAT in d: s.sb_status = _int(d[LIVE_SB_STAT])
+        if LIVE_SB_PH_IND in d: s.sb_ph_indicator = _int(d[LIVE_SB_PH_IND])
+        if LIVE_SB_ORP_IND in d: s.sb_orp_indicator = _int(d[LIVE_SB_ORP_IND])
+        if LIVE_SB_WEAR in d: s.sb_wear_pct = _int(d[LIVE_SB_WEAR])
+        if LIVE_SB_PRODUCING in d: s.sb_producing = _bool(d[LIVE_SB_PRODUCING])
+        if LIVE_SB_BOOST in d: s.sb_boost = _bool(d[LIVE_SB_BOOST])
+
+    def _apply_settings(self, d: dict) -> None:
+        s = self._status
+        if SETT_TSP_READ in d: s.setpoint_f = _int(d[SETT_TSP_READ])
+        if SETT_SPA_SERIAL in d: s.spa_serial = str(d[SETT_SPA_SERIAL])
+        if SETT_FW_YOC in d: s.fw_yoc = str(d[SETT_FW_YOC])
+        if SETT_FW_LPC in d: s.fw_lpc = str(d[SETT_FW_LPC])
+        if SETT_FW_SB in d: s.fw_sb = str(d[SETT_FW_SB])
+        if SETT_FF_READ in d: s.filter_frequency = _int(d[SETT_FF_READ])
+        if SETT_FD_READ in d: s.filter_duration = _int(d[SETT_FD_READ])
+        if SETT_FS_READ in d: s.filter_stop_above_3 = _bool(d[SETT_FS_READ])
+        if SETT_TAG1 in d: s.filter_tag1 = _bool(d[SETT_TAG1])
+        if SETT_TAG2 in d: s.filter_tag2 = _bool(d[SETT_TAG2])
+        if SETT_SB_HR_READ in d: s.spaboy_hours_per_day = _int(d[SETT_SB_HR_READ])
+
+        for i, key in enumerate(SETT_CFG_PUMP):
+            if key in d: s.cfg_pump[i] = _bool(d[key])
+        for i, key in enumerate(SETT_CFG_BLOWER):
+            if key in d: s.cfg_blower[i] = _bool(d[key])
+        if SETT_CFG_LIGHTS in d: s.cfg_lights = _bool(d[SETT_CFG_LIGHTS])
+        for i, key in enumerate(SETT_CFG_HEATER):
+            if key in d: s.cfg_heater[i] = _bool(d[key])
+        if SETT_CFG_SB in d: s.cfg_spaboy = _bool(d[SETT_CFG_SB])
+        if SETT_CFG_FG in d: s.cfg_fogger = _bool(d[SETT_CFG_FG])
+        if SETT_CFG_SDS in d: s.cfg_sds = _bool(d[SETT_CFG_SDS])
+        if SETT_CFG_YESS in d: s.cfg_yess = _bool(d[SETT_CFG_YESS])
+        if SETT_CFG_ON in d: s.cfg_onzen = _bool(d[SETT_CFG_ON])
+
+        if SETT_RDT_RED in d: s.rdt_red = _int(d[SETT_RDT_RED])
+        if SETT_RDT_GREEN in d: s.rdt_green = _int(d[SETT_RDT_GREEN])
+        if SETT_RDT_BLUE in d: s.rdt_blue = _int(d[SETT_RDT_BLUE])
+        if SETT_RDT_BRIGHT in d: s.rdt_brightness = _int(d[SETT_RDT_BRIGHT])
+        if SETT_RDT_PATTERN in d: s.rdt_pattern = _int(d[SETT_RDT_PATTERN])
+
+        if SETT_SB_ORP_HI in d: s.sb_orp_hi = _int(d[SETT_SB_ORP_HI])
+        if SETT_SB_ORP_LO in d: s.sb_orp_lo = _int(d[SETT_SB_ORP_LO])
+        if SETT_SB_PH_HI in d: s.sb_ph_hi = _int(d[SETT_SB_PH_HI])
+        if SETT_SB_PH_LO in d: s.sb_ph_lo = _int(d[SETT_SB_PH_LO])
+
+    def _apply_const(self, d: dict) -> None:
+        s = self._status
+        if CONST_TSP_MIN in d: s.setpoint_min_f = _int(d[CONST_TSP_MIN], DEFAULT_MIN_TEMP_F)
+        if CONST_TSP_MAX in d: s.setpoint_max_f = _int(d[CONST_TSP_MAX], DEFAULT_MAX_TEMP_F)
+
+    def _apply_error(self, d: dict) -> None:
+        """Error topic shape per Customer Portal: {ERR0:bool,...,ERR63:bool, STAT0:bool,...,STAT63:bool}."""
+        s = self._status
+        if not isinstance(d, dict):
+            return
+        active_errs: list[int] = []
+        active_stats: list[int] = []
+        for k, v in d.items():
+            if not v or not isinstance(k, str):
+                continue
+            if k.startswith("ERR"):
+                try:
+                    idx = int(k[3:])
+                except ValueError:
+                    continue
+                if idx in SPA_ERROR_LABELS:
+                    active_errs.append(idx)
+            elif k.startswith("STAT"):
+                try:
+                    idx = int(k[4:])
+                except ValueError:
+                    continue
+                if idx in SPA_STATUS_LABELS:
+                    active_stats.append(idx)
+        s.active_errors = sorted(active_errs)
+        s.active_statuses = sorted(active_stats)
+        s.error = s.active_errors[0] if s.active_errors else 0
+        s.alarm = s.active_statuses[0] if s.active_statuses else 0
+
+    async def _send(self, payload: dict) -> bool:
+        ws = self._ws
+        if ws is None or not self._status.connected:
+            _LOGGER.warning("send while disconnected: %s", payload)
+            return False
+        async with self._send_lock:
+            try:
+                await ws.send(json.dumps(payload))
+                return True
+            except Exception as err:
+                _LOGGER.warning("send failed: %s (%s)", payload, err)
                 return False
-            
-            return await self._send_packet(MsgType.COMMAND, payload)
-
-    def _make_toggle_command(self, field_num: int, value: int) -> bytes:
-        """Create a toggle command with stereo suffix."""
-        payload = self._encode_field(field_num, value)
-        payload += self._encode_field(CmdField.SET_STEREO, 1)  # Required!
-        return payload
-
-    async def async_set_lights(self, on: bool) -> bool:
-        """Set lights on/off."""
-        payload = self._make_toggle_command(CmdField.SET_LIGHTS, 1 if on else 0)
-        return await self.async_send_command(payload)
-
-    async def async_set_pump(self, pump_num: int, status: PumpStatus) -> bool:
-        """Set pump status (1-5)."""
-        field_map = {
-            1: CmdField.SET_PUMP1,
-            2: CmdField.SET_PUMP2,
-            3: CmdField.SET_PUMP3,
-            4: CmdField.SET_PUMP4,
-            5: CmdField.SET_PUMP5,
-        }
-        if pump_num not in field_map:
-            return False
-        payload = self._make_toggle_command(field_map[pump_num], status.value)
-        return await self.async_send_command(payload)
-
-    async def async_set_blower(self, blower_num: int, status: PumpStatus) -> bool:
-        """Set blower status (1-2)."""
-        field_map = {
-            1: CmdField.SET_BLOWER1,
-            2: CmdField.SET_BLOWER2,
-        }
-        if blower_num not in field_map:
-            return False
-        payload = self._make_toggle_command(field_map[blower_num], status.value)
-        return await self.async_send_command(payload)
-
-    async def async_set_temperature(self, temp_f: int) -> bool:
-        """Set temperature setpoint in Fahrenheit."""
-        # Temperature commands don't need stereo suffix
-        payload = self._encode_field(CmdField.SET_TEMP, temp_f)
-        return await self.async_send_command(payload)
-
-    async def async_set_temperature_c(self, temp_c: float) -> bool:
-        """Set temperature setpoint in Celsius."""
-        temp_f = round(temp_c * 9 / 5 + 32)
-        return await self.async_set_temperature(temp_f)
-
-    async def async_set_filter_boost(self, on: bool) -> bool:
-        """Set filter/spa boost on/off."""
-        payload = self._make_toggle_command(CmdField.SPABOY_BOOST, 1 if on else 0)
-        return await self.async_send_command(payload)
-
-    async def async_set_onzen(self, on: bool) -> bool:
-        """Set Onzen on/off."""
-        payload = self._make_toggle_command(CmdField.SET_ONZEN, 1 if on else 0)
-        return await self.async_send_command(payload)
-
-    async def async_set_ozone(self, on: bool) -> bool:
-        """Set ozone on/off."""
-        payload = self._make_toggle_command(CmdField.SET_OZONE, 1 if on else 0)
-        return await self.async_send_command(payload)
-
-    async def async_set_filter(self, on: bool) -> bool:
-        """Set filter on/off."""
-        payload = self._make_toggle_command(CmdField.SET_FILTER, 1 if on else 0)
-        return await self.async_send_command(payload)
-
-    async def async_set_sds(self, on: bool) -> bool:
-        """Set SDS (bubbles) on/off."""
-        payload = self._make_toggle_command(CmdField.SET_SDS, 1 if on else 0)
-        return await self.async_send_command(payload)
 
     async def async_request_status(self) -> bool:
-        """Request current status from spa."""
-        async with self._lock:
-            if not self._status.connected:
-                return False
-            return await self._send_packet(MsgType.LIVE)
+        return await self._send(BOOTSTRAP_QUERY)
+
+    async def async_set_temperature(self, temp_f: int) -> bool:
+        bounded = max(self._status.setpoint_min_f, min(temp_f, self._status.setpoint_max_f))
+        return await self._send({CMD_SET_TSP: int(bounded)})
+
+    async def async_set_temperature_c(self, temp_c: float) -> bool:
+        return await self.async_set_temperature(round(temp_c * 9 / 5 + 32))
+
+    async def async_cycle_pump(self, pump_num: int) -> bool:
+        if not 1 <= pump_num <= 5:
+            return False
+        return await self._send({CMD_PUMP_NEXT[pump_num - 1]: 1})
+
+    async def async_set_pump(self, pump_num: int, target: PumpStatus) -> bool:
+        """Cycle pump from current state to target."""
+        if not 1 <= pump_num <= 5:
+            return False
+        current = (self._status.pump1, self._status.pump2, self._status.pump3,
+                   self._status.pump4, self._status.pump5)[pump_num - 1]
+        return await self._cycle_to(target.value, current.value, lambda: self.async_cycle_pump(pump_num))
+
+    async def async_cycle_blower(self, blower_num: int) -> bool:
+        if not 1 <= blower_num <= 2:
+            return False
+        return await self._send({CMD_BLOWER_NEXT[blower_num - 1]: 1})
+
+    async def async_set_blower(self, blower_num: int, target: PumpStatus) -> bool:
+        if not 1 <= blower_num <= 2:
+            return False
+        current = (self._status.blower1, self._status.blower2)[blower_num - 1]
+        return await self._cycle_to(target.value, current.value, lambda: self.async_cycle_blower(blower_num))
+
+    async def _cycle_to(self, target: int, current: int, cycle_fn: Callable[[], Any]) -> bool:
+        """Cycle (0→1→2→0) until current matches target. Cap at 3 calls."""
+        if current == target:
+            return True
+        cycles = (target - current) % 3
+        ok = True
+        for _ in range(cycles):
+            ok = await cycle_fn() and ok
+            await asyncio.sleep(0.25)
+        return ok
+
+    async def async_cycle_lights(self) -> bool:
+        return await self._send({CMD_LIGHTS_NEXT: 1})
+
+    async def async_set_lights(self, on: bool) -> bool:
+        if self._status.lights == on:
+            return True
+        return await self.async_cycle_lights()
+
+    async def async_cycle_sds(self) -> bool:
+        return await self._send({CMD_SDS_NEXT: 1})
+
+    async def async_set_sds(self, on: bool) -> bool:
+        if self._status.sds == on:
+            return True
+        return await self.async_cycle_sds()
+
+    async def async_cycle_yess(self) -> bool:
+        return await self._send({CMD_YESS_NEXT: 1})
+
+    async def async_set_yess(self, on: bool) -> bool:
+        if self._status.yess == on:
+            return True
+        return await self.async_cycle_yess()
+
+    async def async_cycle_fogger(self) -> bool:
+        return await self._send({CMD_FOGGER_NEXT: 1})
+
+    async def async_set_fogger(self, on: bool) -> bool:
+        if self._status.fogger == on:
+            return True
+        return await self.async_cycle_fogger()
+
+    async def async_cycle_onzen(self) -> bool:
+        return await self._send({CMD_ONZEN_NEXT: 1})
+
+    async def async_set_onzen(self, on: bool) -> bool:
+        if self._status.onzen == on:
+            return True
+        return await self.async_cycle_onzen()
+
+    async def async_set_filter_boost(self, on: bool) -> bool:
+        return await self._send({CMD_FILTER_BOOST: 1 if on else 0})
+
+    async def async_set_spaboy_boost(self, on: bool) -> bool:
+        return await self._send({CMD_SB_BOOST: 1 if on else 0})
+
+    async def async_set_rdt(self, *, red: int | None = None, green: int | None = None,
+                            blue: int | None = None, brightness: int | None = None,
+                            pattern: int | None = None) -> bool:
+        payload: dict[str, int] = {}
+        if red is not None: payload[SETT_RDT_RED] = max(0, min(int(red), 255))
+        if green is not None: payload[SETT_RDT_GREEN] = max(0, min(int(green), 255))
+        if blue is not None: payload[SETT_RDT_BLUE] = max(0, min(int(blue), 255))
+        if brightness is not None: payload[SETT_RDT_BRIGHT] = max(0, min(int(brightness), 255))
+        if pattern is not None: payload[SETT_RDT_PATTERN] = int(pattern)
+        if not payload:
+            return False
+        return await self._send(payload)
+
+    async def async_set_chlorine_band(self, target_orp: int, band: int = 5) -> bool:
+        return await self._send({SETT_SB_ORP_HI: int(target_orp) + band,
+                                 SETT_SB_ORP_LO: int(target_orp) - band})
+
+    async def async_set_ph_band(self, target_ph_x100: int, band: int = 5) -> bool:
+        return await self._send({SETT_SB_PH_HI: int(target_ph_x100) + band,
+                                 SETT_SB_PH_LO: int(target_ph_x100) - band})
+
+    async def async_set_filter_frequency(self, freq: int) -> bool:
+        return await self._send({CMD_SET_FF: int(freq)})
+
+    async def async_set_filter_duration(self, dur: int) -> bool:
+        return await self._send({CMD_SET_FD: int(dur)})
+
+    async def async_set_stop_filter_above(self, on: bool) -> bool:
+        return await self._send({CMD_SET_FS: 1 if on else 0})
+
+    async def async_set_spaboy_hours(self, hours: int) -> bool:
+        return await self._send({CMD_SET_SB_HRS: int(hours)})
+
+    async def async_ph_boost(self) -> bool:
+        # PHboost takes value 0 per Customer Portal SpaBoy page
+        return await self._send({CMD_PH_BOOST: 0})
+
+    async def async_oz_peak1(self, off: bool = False) -> bool:
+        return await self._send({CMD_OZ_PEAK_1: "off" if off else 1})
+
+    async def async_oz_peak2(self) -> bool:
+        return await self._send({CMD_OZ_PEAK_2: 1})
+
+    async def async_reset(self, scope: str = "all") -> bool:
+        return await self._send({CMD_RESET: scope})

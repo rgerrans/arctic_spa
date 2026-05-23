@@ -1,49 +1,32 @@
-"""Constants for the Arctic Spa integration."""
+"""Constants for the Arctic Spa integration (firmware 3.1.x+ WS protocol)."""
 from enum import IntEnum
 
 DOMAIN = "arctic_spa"
 
-# Configuration
 CONF_HOST = "host"
 CONF_TEMP_UNIT = "temperature_unit"
 
-# Defaults
-DEFAULT_PORT = 12121
-DEFAULT_TEMP_UNIT = "C"
+DEFAULT_PORT = 8765
+DEFAULT_TEMP_UNIT = "F"
+WS_PATH = "/"
 
-# UDP Discovery
-UDP_SEND_PORT = 12122
-UDP_RECV_PORT = 21212
-UDP_QUERY_MSG = b"Query,BlueFalls,\n"
+BOOTSTRAP_QUERY = {"query": 0}
+RECONNECT_DELAY = 5
+FALLBACK_REFRESH_INTERVAL = 300
 
-# Protocol
-MAGIC = 0xABAD1D3A
-HEADER_SIZE = 20
-
-# Message Types
-class MsgType(IntEnum):
-    LIVE = 0
-    COMMAND = 1
-    SETTINGS = 2
-    CONFIG = 3
-    PEAK = 4
-    CLOCK = 5
-    INFO = 6
-    ERROR = 7
-    ROUTER = 9
-    FILTERS = 13
-    ONZEN_LIVE = 48
-    ONZEN_SETTINGS = 50
+DEFAULT_MIN_TEMP_F = 59
+DEFAULT_MAX_TEMP_F = 104
+HARD_MAX_TEMP_F = 107
+DEFAULT_MIN_TEMP_C = 15
+DEFAULT_MAX_TEMP_C = 40
 
 
-# Pump Status
 class PumpStatus(IntEnum):
     OFF = 0
     LOW = 1
     HIGH = 2
 
 
-# Heater Status
 class HeaterStatus(IntEnum):
     IDLE = 0
     WARMUP = 1
@@ -51,7 +34,6 @@ class HeaterStatus(IntEnum):
     COOLDOWN = 3
 
 
-# Filter Status
 class FilterStatus(IntEnum):
     IDLE = 0
     PURGE = 1
@@ -63,67 +45,185 @@ class FilterStatus(IntEnum):
     SANITIZE = 7
 
 
-# Protobuf Field Numbers - spa_live
-class LiveField(IntEnum):
-    TEMP = 1
-    SETPOINT = 2
-    PUMP1 = 3
-    PUMP2 = 4
-    PUMP3 = 5
-    PUMP4 = 6
-    PUMP5 = 7
-    BLOWER1 = 8
-    BLOWER2 = 9
-    LIGHTS = 10
-    STEREO = 11
-    HEATER1 = 12
-    HEATER2 = 13
-    FILTER = 14
-    ONZEN = 15
-    OZONE = 16
-    EXHAUST_FAN = 17
-    SAUNA = 18
-    HEATER_ADC = 20
-    SAUNA_TIME = 21
-    ECONOMY = 22
-    CURRENT_ADC = 23
-    ALL_ON = 24
-    FOGGER = 25
-    ERROR = 26
-    ALARM = 27
-    STATUS = 28
-    PH = 29
-    ORP = 30
-    SDS = 31
-    YESS = 32
+# Live-topic field names (firmware 3.1.x JSON)
+LIVE_TEMP = "STemp"
+LIVE_PHSM = "phSM"
+LIVE_SBSM = "sbSM"
+LIVE_PUMP = ("P1", "P2", "P3", "P4", "P5")
+LIVE_BLOWER = ("BL1", "BL2")
+LIVE_LIGHTS = "Li"
+LIVE_HEATER = ("H1", "H2")
+LIVE_FILTER = "Filter"
+LIVE_OZONE = "Oz"
+LIVE_ONZEN = "On"
+LIVE_FAN = "Fan"
+LIVE_FOGGER = "Fogger"
+LIVE_SDS = "SDS"
+LIVE_YESS = "Yess"
+LIVE_ECON = "Econ"
+LIVE_ALL_ON = "AllOn"
+LIVE_CURRENT = "Current"
+LIVE_HTEMP = "HTemp"
 
+LIVE_SB_TEMP = "sbTemp"
+LIVE_SB_VIN = "sbVin"
+LIVE_SB_VOUT = "sbVout"
+LIVE_SB_I1 = "sbI1"
+LIVE_SB_I2 = "sbI2"
+LIVE_SB_PH = "sbpH"
+LIVE_SB_ORP = "sbORP"
+LIVE_SB_STAT = "sbStat"
+LIVE_SB_PH_IND = "sbpHind"
+LIVE_SB_ORP_IND = "sbORPind"
+LIVE_SB_WEAR = "sbWear"
+LIVE_SB_PRODUCING = "sbProducing"
+LIVE_SB_BOOST = "sbBoost"
 
-# Protobuf Field Numbers - spa_command
-class CmdField(IntEnum):
-    SET_TEMP = 1
-    SET_PUMP1 = 2
-    SET_PUMP2 = 3
-    SET_PUMP3 = 4
-    SET_PUMP4 = 5
-    SET_PUMP5 = 6
-    SET_BLOWER1 = 7
-    SET_BLOWER2 = 8
-    SET_LIGHTS = 9
-    SET_STEREO = 10
-    SET_FILTER = 11
-    SET_ONZEN = 12
-    SET_OZONE = 13
-    SET_EXHAUST_FAN = 14
-    SET_SAUNA_STATE = 15
-    SET_SAUNA_TIME = 16
-    ALL_ON = 17
-    SET_FOGGER = 18
-    SPABOY_BOOST = 19
-    PACK_RESET = 20
-    LOG_DUMP = 21
-    SET_SDS = 22
-    SET_YESS = 23
+# Settings-topic field names (read keys are bare, write keys have set/cfg prefix)
+SETT_TSP_READ = "TSP"
+SETT_TAG1 = "TAG1"
+SETT_TAG2 = "TAG2"
+SETT_FS_READ = "FS"
+SETT_SB_HR_READ = "SBHr"
+SETT_SPA_SERIAL = "SPASN"
+SETT_FW_YOC = "YOCFWVer"
+SETT_FW_LPC = "LPCFWVer"
+SETT_FW_SB = "SBFWVer"
+SETT_SB_CONNECTED = "SBConnected"
+SETT_RFID_CONNECTED = "RFIDConnected"
+SETT_CFG_PUMP = ("cfgP1", "cfgP2", "cfgP3", "cfgP4", "cfgP5")
+SETT_CFG_BLOWER = ("cfgB1", "cfgB2")
+SETT_CFG_LIGHTS = "cfgLi"
+SETT_CFG_HEATER = ("cfgH1", "cfgH2")
+SETT_CFG_SB = "cfgSB"
+SETT_CFG_FG = "cfgFG"
+SETT_CFG_SDS = "cfgSDS"
+SETT_CFG_YESS = "cfgYESS"
+SETT_CFG_ON = "cfgOn"
+SETT_RDT_RED = "RDT_red"
+SETT_RDT_GREEN = "RDT_green"
+SETT_RDT_BLUE = "RDT_blue"
+SETT_RDT_BRIGHT = "RDT_bright"
+SETT_RDT_PATTERN = "RDT_pattern"
+SETT_FF_READ = "FF"  # filter frequency (effective)
+SETT_FD_READ = "FD"  # filter duration (effective)
+SETT_SB_ORP_HI = "SBORPhi"
+SETT_SB_ORP_LO = "SBORPlo"
+SETT_SB_PH_HI = "SBpHhi"
+SETT_SB_PH_LO = "SBpHlo"
 
+# Const-topic bound names
+CONST_TSP_MIN = "setTSPmin"
+CONST_TSP_MAX = "setTSPmax"
 
-# Update interval
-SCAN_INTERVAL = 30
+# Write keys (sent in raw JSON over the WS, no envelope)
+CMD_SET_TSP = "setTSP"
+CMD_PUMP_NEXT = ("P1next", "P2next", "P3next", "P4next", "P5next")
+CMD_BLOWER_NEXT = ("BL1next", "BL2next")
+CMD_LIGHTS_NEXT = "Linext"
+CMD_SDS_NEXT = "SDSnext"
+CMD_YESS_NEXT = "YESSnext"
+CMD_FOGGER_NEXT = "Fgnext"
+CMD_ONZEN_NEXT = "Onznext"
+CMD_FILTER_BOOST = "FLTRboost"
+CMD_SB_BOOST = "SBboost"
+CMD_PH_BOOST = "PHboost"
+CMD_OZ_PEAK_1 = "OzPeak1"
+CMD_OZ_PEAK_2 = "OzPeak2"
+CMD_RESET = "Reset"
+CMD_SET_FF = "setFF"
+CMD_SET_FD = "setFD"
+CMD_SET_FS = "setFS"
+CMD_SET_SB_HRS = "setSBHrs"
+CMD_SET_ON_HR = "setOnHr"
+CMD_SET_ON_CY = "setOnCy"
+CMD_SET_OZ_HR = "setOzHr"
+CMD_SET_OZ_CY = "setOzCy"
+CMD_QUERY = "query"
+
+# Error/status code labels (from upstream arcticLabels.enums.ts; blanks omitted)
+SPA_ERROR_LABELS = {
+    0: "NO FLOW",
+    1: "FLOW SWITCH",
+    2: "HEATER OVER TEMPERATURE",
+    3: "SPA OVER TEMPERATURE",
+    4: "SPA TEMPERATURE PROBE",
+    5: "SPA HIGH LIMIT",
+    7: "FREEZE PROTECT",
+    8: "PH HIGH",
+    9: "HEATER PROBE DISCONNECTED",
+    11: "SPABOY COMM ERROR",
+    13: "HEATER WAY ABOVE WATER TEMP",
+    14: "ORP NOT RESPONDING TO PRODUCTION",
+    15: "PH TOO LOW (<6.5)",
+}
+
+SPA_STATUS_LABELS = {
+    6: "SEEPROM ERROR",
+    10: "HEATER PROBE TEST FAILED",
+    12: "HEATER SPA MISMATCH",
+    13: "HEATER WAY ABOVE WATER",
+    16: "PH PUMP NONRESPONSIVE",
+    17: "TARGET TEMPERATURE REACHED",
+    20: "NO CURRENT PUMP1L",
+    21: "NO CURRENT PUMP1H",
+    22: "NO CURRENT PUMP2",
+    23: "NO CURRENT PUMP3",
+    24: "NO CURRENT PUMP4",
+    25: "NO CURRENT YESS",
+    26: "NO CURRENT ONZEN",
+    27: "NO CURRENT HEATER1",
+    28: "NO CURRENT HEATER2",
+    29: "ERRONEOUS JSON LABEL",
+    30: "ERRONEOUS JSON DATA",
+    33: "PUMP1 START CAP FAILED",
+    34: "PUMP1H START CAP FAILED",
+    35: "PUMP2 START CAP FAILED",
+    36: "PUMP3 START CAP FAILED",
+    37: "PUMP4 START CAP FAILED",
+    38: "YESS START CAP FAILED",
+    39: "ONZEN START CAP FAILED",
+    53: "SPABOY PH TIMEOUT",
+    54: "SPABOY ORP TIMEOUT",
+    59: "PCBID0",
+    60: "PCBID1",
+    61: "PCBID2",
+    62: "PCBID3",
+    63: "PCBID4",
+}
+
+# SmartPH state machine (live.phSM) — from upstream smartPhState.enums.ts
+SMARTPH_LABELS = {
+    0: "Idle",
+    1: "Check Conditions",
+    2: "Priming",
+    3: "Preamble Pulse",
+    4: "Dosing",
+    5: "Wait Between Shots",
+    6: "Evaluate Recovery",
+    7: "Error Recovery",
+    8: "Post Preamble Wait",
+    9: "Abort Sequence",
+}
+
+ERROR_CODES = {
+    0: "No Error",
+    1: "Temperature Sensor A Fault",
+    2: "Temperature Sensor B Fault",
+    3: "Water Temperature Too Hot",
+    4: "Water Temperature Too Cold",
+    5: "Flow Switch Error",
+    6: "Dry Fire Protection",
+    7: "GFCI Trip",
+    8: "Heater Fault",
+    9: "Communication Error",
+    10: "Sensor Sync Error",
+}
+
+ALARM_CODES = {
+    0: "No Alarm",
+    1: "Water Flow Alarm",
+    2: "High Temperature Alarm",
+    3: "Heater Alarm",
+    4: "Sensor Alarm",
+}
