@@ -29,8 +29,9 @@ async def async_setup_entry(
         _FoggerSwitch(coordinator, entry),
         _StopFilterAboveSwitch(coordinator, entry),
     ]
-    # Pumps 2-5 (HIGH-only on/off)
-    for i in range(2, 6):
+    # Pumps 1-5 — on/off switch (turn_on cycles to HIGH; turn_off cycles to OFF).
+    # Granular off/low/high control still available via select.<pump>_speed.
+    for i in range(1, 6):
         entities.append(_PumpOnOff(coordinator, entry, i))
     # Blowers 1-2
     for i in range(1, 3):
