@@ -324,7 +324,7 @@ class SpaStatus:
 
         if self.blower1 != PumpStatus.OFF:
             power += 500
-        return power
+        return max(0, power)  # Defensive — Power sensor must never be negative
 
     def update_energy(self) -> None:
         now = datetime.now()

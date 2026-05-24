@@ -403,13 +403,25 @@ class _EnergyCumulative(CoordinatorEntity[ArcticSpaCoordinator], RestoreEntity, 
         if last and last.state not in ("unknown", "unavailable", None):
             try:
                 self._restored = float(last.state)
+                # Raise the live counter to at least the restored value so the
+                # next push doesn't produce an apparent counter-reset (which
+                # poisons HA's TOTAL_INCREASING + Energy dashboard math).
                 if self.coordinator.client.status:
-                    self.coordinator.client.status.energy_kwh = self._restored
+                    self.coordinator.client.status.energy_kwh = max(
+                        self.coordinator.client.status.energy_kwh, self._restored
+                    )
+                # Flush restored value to HA state immediately so the first
+                # coordinator push doesn't publish a stale 0.
+                self.async_write_ha_state()
             except (ValueError, TypeError):
                 pass
 
     @property
     def native_value(self):
-        if self.coordinator.data:
-            return round(self.coordinator.data.energy_kwh, 3)
-        return self._restored
+        # Floor at the restored value — TOTAL_INCREASING semantics require the
+        # reported value to monotonically increase across restarts. If the
+        # live counter is briefly less than restored (e.g. async_added_to_hass
+        # hasn't applied the restore to client.status yet), return restored.
+        live = self.coordinator.data.energy_kwh if self.coordinator.data else 0.0
+        base = self._restored or 0.0
+        return round(max(live, base), 3)
