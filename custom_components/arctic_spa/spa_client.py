@@ -60,6 +60,10 @@ from .const import (
     LIVE_PHSM,
     LIVE_PUMP,
     LIVE_SB_BOOST,
+    LIVE_SB_E1N,
+    LIVE_SB_E1P,
+    LIVE_SB_E2N,
+    LIVE_SB_E2P,
     LIVE_SB_I1,
     LIVE_SB_I2,
     LIVE_SB_ORP,
@@ -72,6 +76,8 @@ from .const import (
     LIVE_SB_VIN,
     LIVE_SB_VOUT,
     LIVE_SB_WEAR,
+    LIVE_SB_WEAR_E1,
+    LIVE_SB_WEAR_E2,
     LIVE_SBSM,
     LIVE_SDS,
     LIVE_TEMP,
@@ -209,6 +215,12 @@ class SpaStatus:
     sb_ph_indicator: int = 0
     sb_orp_indicator: int = 0
     sb_wear_pct: int = 0
+    sb_wear_e1_pct: int = 0
+    sb_wear_e2_pct: int = 0
+    sb_e1_pos: int = 0
+    sb_e1_neg: int = 0
+    sb_e2_pos: int = 0
+    sb_e2_neg: int = 0
     sb_producing: bool = False
     sb_boost: bool = False
 
@@ -479,7 +491,7 @@ class ArcticSpaClient:
             elif topic == "error":
                 self._apply_error(data)
             elif topic == "status":
-                pass  # advisory; not surfaced as entity
+                self._apply_status(data)
             elif topic == "update-status":
                 pass  # firmware update progress; could be surfaced later
             else:
@@ -554,6 +566,12 @@ class ArcticSpaClient:
         if LIVE_SB_PH_IND in d: s.sb_ph_indicator = _int(d[LIVE_SB_PH_IND])
         if LIVE_SB_ORP_IND in d: s.sb_orp_indicator = _int(d[LIVE_SB_ORP_IND])
         if LIVE_SB_WEAR in d: s.sb_wear_pct = _int(d[LIVE_SB_WEAR])
+        if LIVE_SB_WEAR_E1 in d: s.sb_wear_e1_pct = _int(d[LIVE_SB_WEAR_E1])
+        if LIVE_SB_WEAR_E2 in d: s.sb_wear_e2_pct = _int(d[LIVE_SB_WEAR_E2])
+        if LIVE_SB_E1P in d: s.sb_e1_pos = _int(d[LIVE_SB_E1P])
+        if LIVE_SB_E1N in d: s.sb_e1_neg = _int(d[LIVE_SB_E1N])
+        if LIVE_SB_E2P in d: s.sb_e2_pos = _int(d[LIVE_SB_E2P])
+        if LIVE_SB_E2N in d: s.sb_e2_neg = _int(d[LIVE_SB_E2N])
         if LIVE_SB_PRODUCING in d: s.sb_producing = _bool(d[LIVE_SB_PRODUCING])
         if LIVE_SB_BOOST in d: s.sb_boost = _bool(d[LIVE_SB_BOOST])
 
@@ -601,32 +619,39 @@ class ArcticSpaClient:
         if CONST_TSP_MAX in d: s.setpoint_max_f = _int(d[CONST_TSP_MAX], DEFAULT_MAX_TEMP_F)
 
     def _apply_error(self, d: dict) -> None:
-        """Error topic shape per Customer Portal: {ERR0:bool,...,ERR63:bool, STAT0:bool,...,STAT63:bool}."""
+        """Error topic: {ERR0:bool,...,ERR63:bool, Lower_ERR_Word:hex, Upper_ERR_Word:hex}."""
         s = self._status
         if not isinstance(d, dict):
             return
         active_errs: list[int] = []
+        for k, v in d.items():
+            if not v or not isinstance(k, str) or not k.startswith("ERR"):
+                continue
+            try:
+                idx = int(k[3:])
+            except ValueError:
+                continue
+            if idx in SPA_ERROR_LABELS:
+                active_errs.append(idx)
+        s.active_errors = sorted(active_errs)
+        s.error = s.active_errors[0] if s.active_errors else 0
+
+    def _apply_status(self, d: dict) -> None:
+        """Status topic: {STAT0:bool,...,STAT63:bool, Lower_STAT_Word:hex, Upper_STAT_Word:hex}."""
+        s = self._status
+        if not isinstance(d, dict):
+            return
         active_stats: list[int] = []
         for k, v in d.items():
-            if not v or not isinstance(k, str):
+            if not v or not isinstance(k, str) or not k.startswith("STAT"):
                 continue
-            if k.startswith("ERR"):
-                try:
-                    idx = int(k[3:])
-                except ValueError:
-                    continue
-                if idx in SPA_ERROR_LABELS:
-                    active_errs.append(idx)
-            elif k.startswith("STAT"):
-                try:
-                    idx = int(k[4:])
-                except ValueError:
-                    continue
-                if idx in SPA_STATUS_LABELS:
-                    active_stats.append(idx)
-        s.active_errors = sorted(active_errs)
+            try:
+                idx = int(k[4:])
+            except ValueError:
+                continue
+            if idx in SPA_STATUS_LABELS:
+                active_stats.append(idx)
         s.active_statuses = sorted(active_stats)
-        s.error = s.active_errors[0] if s.active_errors else 0
         s.alarm = s.active_statuses[0] if s.active_statuses else 0
 
     async def _send(self, payload: dict) -> bool:
