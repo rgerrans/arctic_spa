@@ -116,12 +116,28 @@ class _BlowerSelect(_BaseSelect):
         await self.coordinator.async_set_blower(self._num, target.value)
 
 
-class _RdtPatternSelect(_BaseSelect):
+class _RdtPatternSelect(_BaseSelect, RestoreEntity):
+    """Cabinet Light Pattern — optimistically cached (spa firmware doesn't echo).
+
+    Confirmed via live diagnostic 2026-05-24: spa never publishes RDT_pattern
+    in sett topic. setRDTpattern writes ARE applied (lights change pattern)
+    but the current pattern can't be read back. So we cache the user's last
+    selection locally and return it as current_option. RestoreEntity persists
+    the selection across HA restarts.
+    """
+
     _attr_options = RDT_PATTERN_OPTIONS
     _attr_icon = "mdi:animation"
 
     def __init__(self, coordinator, entry) -> None:
         super().__init__(coordinator, entry, "Cabinet Light Pattern", "rdt_pattern")
+        self._selected: str | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and last.state in RDT_PATTERN_OPTIONS:
+            self._selected = last.state
 
     @property
     def entity_registry_enabled_default(self) -> bool:
@@ -131,15 +147,15 @@ class _RdtPatternSelect(_BaseSelect):
 
     @property
     def current_option(self):
-        if not self.coordinator.data:
-            return None
-        return RDT_PATTERN_NAMES.get(self.coordinator.data.rdt_pattern)
+        return self._selected
 
     async def async_select_option(self, option: str) -> None:
         idx = RDT_PATTERN_FWD.get(option)
         if idx is None:
             return
         await self.coordinator.async_set_rdt(pattern=idx)
+        self._selected = option
+        self.async_write_ha_state()
 
 
 class _ChlorineLevelSelect(_BaseSelect):
