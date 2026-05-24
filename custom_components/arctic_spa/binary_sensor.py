@@ -25,7 +25,7 @@ async def async_setup_entry(
               lambda d: d.heater_active, BinarySensorDeviceClass.HEAT, "mdi:water-boiler"),
         _Bool(coordinator, entry, "Connected", "connected",
               lambda d: d.connected, BinarySensorDeviceClass.CONNECTIVITY, "mdi:wifi"),
-        _Bool(coordinator, entry, "Boost Active", "boost_active",
+        _Bool(coordinator, entry, "Filter Boost Active", "boost_active",
               lambda d: d.filter_boost_active, None, "mdi:rocket-launch"),
         _Bool(coordinator, entry, "Onzen Active", "onzen_active",
               lambda d: d.onzen, None, "mdi:water-plus"),
