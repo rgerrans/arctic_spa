@@ -53,7 +53,7 @@ class _LightsSwitch(_BaseSwitch):
     _attr_icon = "mdi:lightbulb"
 
     def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "Cabinet Lights", "lights")
+        super().__init__(coordinator, entry, "Lights", "lights")
 
     @property
     def entity_registry_enabled_default(self) -> bool:

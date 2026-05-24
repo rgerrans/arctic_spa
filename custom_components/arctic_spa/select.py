@@ -65,12 +65,19 @@ class _PumpSelect(_BaseSelect):
 
     def __init__(self, coordinator, entry, num: int) -> None:
         self._num = num
-        super().__init__(coordinator, entry, f"Pump {num} Speed", f"pump{num}_select")
+        # Pump 1 is always present (circulation pump); drop the "Speed" suffix
+        # since it's the only pump entity exposed for slot 1.
+        name = "Pump 1" if num == 1 else f"Pump {num} Speed"
+        super().__init__(coordinator, entry, name, f"pump{num}_select")
 
     @property
     def entity_registry_enabled_default(self) -> bool:
+        # Pump 1 is universal on Arctic Spas — hard-enable to avoid the
+        # cfg-arrives-after-first-refresh race that left it disabled at install.
+        if self._num == 1:
+            return True
         if not self.coordinator.data:
-            return self._num == 1
+            return False
         return bool(self.coordinator.data.cfg_pump[self._num - 1])
 
     @property
