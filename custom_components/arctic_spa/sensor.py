@@ -73,7 +73,7 @@ async def async_setup_entry(
         _Numeric(coordinator, entry, "Current Draw", "current_draw", "mdi:current-ac",
                  lambda d: d.current_draw or None, unit="A",
                  state_class=SensorStateClass.MEASUREMENT),
-        _Numeric(coordinator, entry, "Filter Run Hours / Day", "filter_run_hours_per_day",
+        _Numeric(coordinator, entry, "Filter Run Hours Per Day", "filter_run_hours_per_day",
                  "mdi:timer-outline",
                  lambda d: d.filter_run_hours_per_day or None, unit="h"),
         _SmartPhState(coordinator, entry),
@@ -92,11 +92,11 @@ async def async_setup_entry(
                  lambda d: d.sb_voltage_out if d.sb_present else None,
                  unit=UnitOfElectricPotential.VOLT, device_class=SensorDeviceClass.VOLTAGE,
                  state_class=SensorStateClass.MEASUREMENT),
-        _Numeric(coordinator, entry, "SpaBoy Cell Current 1", "spaboy_current_1", "mdi:current-dc",
+        _Numeric(coordinator, entry, "SpaBoy Electrode 1 Current", "spaboy_current_1", "mdi:current-dc",
                  lambda d: d.sb_current_1 if d.sb_present else None,
                  unit=UnitOfElectricCurrent.AMPERE, device_class=SensorDeviceClass.CURRENT,
                  state_class=SensorStateClass.MEASUREMENT),
-        _Numeric(coordinator, entry, "SpaBoy Cell Current 2", "spaboy_current_2", "mdi:current-dc",
+        _Numeric(coordinator, entry, "SpaBoy Electrode 2 Current", "spaboy_current_2", "mdi:current-dc",
                  lambda d: d.sb_current_2 if d.sb_present else None,
                  unit=UnitOfElectricCurrent.AMPERE, device_class=SensorDeviceClass.CURRENT,
                  state_class=SensorStateClass.MEASUREMENT),
@@ -183,12 +183,7 @@ class _Base(CoordinatorEntity[ArcticSpaCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = name
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
 
 
 class _Temp(_Base):
@@ -495,7 +490,7 @@ class _SpaBoyStateMachine(_Base):
     _attr_entity_category = "diagnostic"
 
     def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "SpaBoy State", "spaboy_state_machine")
+        super().__init__(coordinator, entry, "SpaBoy State Machine", "spaboy_state_machine")
 
     @property
     def entity_registry_enabled_default(self) -> bool:
@@ -535,12 +530,7 @@ class _EnergyCumulative(CoordinatorEntity[ArcticSpaCoordinator], RestoreEntity, 
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_energy"
         self._attr_name = "Energy"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
         self._restored: float | None = None
 
     async def async_added_to_hass(self) -> None:

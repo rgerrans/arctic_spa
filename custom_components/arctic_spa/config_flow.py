@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN, CONF_TEMP_UNIT, DEFAULT_TEMP_UNIT
+from .const import CONF_NAME, CONF_TEMP_UNIT, DEFAULT_NAME, DEFAULT_TEMP_UNIT, DOMAIN
 from .spa_client import ArcticSpaClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +22,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Optional(CONF_TEMP_UNIT, default=DEFAULT_TEMP_UNIT): vol.In(["C", "F"]),
+        vol.Optional(CONF_NAME, default=DEFAULT_NAME): str,
     }
 )
 

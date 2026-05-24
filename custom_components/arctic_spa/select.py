@@ -56,12 +56,7 @@ class _BaseSelect(CoordinatorEntity[ArcticSpaCoordinator], SelectEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = name
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
 
 
 class _PumpSelect(_BaseSelect):
@@ -189,12 +184,7 @@ class _FilterLifespanSelect(CoordinatorEntity[ArcticSpaCoordinator], SelectEntit
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_filter_lifespan"
         self._attr_name = "Filter Replacement Frequency"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
         self._selected: str = FILTER_LIFESPAN_DEFAULT
 
     async def async_added_to_hass(self) -> None:

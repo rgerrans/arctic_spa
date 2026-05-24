@@ -46,12 +46,7 @@ class _FilterInstalledDate(
         self._num = num
         self._attr_unique_id = f"{entry.entry_id}_filter_{num}_installed_date"
         self._attr_name = f"Filter {num} Installed Date"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

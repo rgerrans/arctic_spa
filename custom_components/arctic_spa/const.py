@@ -5,9 +5,11 @@ DOMAIN = "arctic_spa"
 
 CONF_HOST = "host"
 CONF_TEMP_UNIT = "temperature_unit"
+CONF_NAME = "name"
 
 DEFAULT_PORT = 8765
 DEFAULT_TEMP_UNIT = "F"
+DEFAULT_NAME = "Arctic Spa"
 WS_PATH = "/"
 
 BOOTSTRAP_QUERY = {"query": 0}

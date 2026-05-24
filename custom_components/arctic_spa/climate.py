@@ -55,12 +55,7 @@ class ArcticSpaClimate(CoordinatorEntity[ArcticSpaCoordinator], ClimateEntity):
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_climate"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
         self._temp_unit = temp_unit
         if temp_unit == "C":
             self._attr_temperature_unit = UnitOfTemperature.CELSIUS

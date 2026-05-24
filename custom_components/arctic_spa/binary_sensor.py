@@ -69,12 +69,7 @@ class _BaseBin(CoordinatorEntity[ArcticSpaCoordinator], BinarySensorEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_name = name
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Arctic Spa",
-            "manufacturer": "Arctic Spas",
-            "model": "Hot Tub",
-        }
+        self._attr_device_info = coordinator.device_info
 
 
 class _Bool(_BaseBin):
