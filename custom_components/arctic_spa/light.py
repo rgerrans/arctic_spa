@@ -29,14 +29,18 @@ async def async_setup_entry(
 
 class _RdtLight(CoordinatorEntity[ArcticSpaCoordinator], LightEntity):
     _attr_has_entity_name = True
-    _attr_name = "Spa Light"
+    _attr_name = "Lights"
     _attr_icon = "mdi:led-strip-variant"
     _attr_supported_color_modes = {ColorMode.RGB}
     _attr_color_mode = ColorMode.RGB
 
     def __init__(self, coordinator, entry) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_rdt_light"
+        # unique_id intentionally matches switch.lights (HA scopes unique_ids
+        # per platform — light + switch can share the suffix without conflict).
+        # Renamed from 'rdt_light' in v2.1.9 to get entity_id light.<prefix>_lights
+        # matching switch.<prefix>_lights instead of the v2.0-era cabinet_lights.
+        self._attr_unique_id = f"{entry.entry_id}_lights"
         self._attr_device_info = coordinator.device_info
         # Remember last non-zero color so we can restore on turn-on.
         self._last_rgb: tuple[int, int, int] | None = None
