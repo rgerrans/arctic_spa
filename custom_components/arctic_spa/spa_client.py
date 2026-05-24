@@ -814,6 +814,14 @@ class ArcticSpaClient:
         return await self._send({SETT_SB_ORP_HI: int(target_orp) + band,
                                  SETT_SB_ORP_LO: int(target_orp) - band})
 
+    async def async_set_chlorine_level(self, lo: int, hi: int) -> bool:
+        """Set ORP band + reset SBHr to 0, matching Customer Portal UX."""
+        return await self._send({
+            SETT_SB_ORP_HI: int(hi),
+            SETT_SB_ORP_LO: int(lo),
+            CMD_SET_SB_HRS: 0,
+        })
+
     async def async_set_ph_band(self, target_ph_x100: int, band: int = 5) -> bool:
         return await self._send({SETT_SB_PH_HI: int(target_ph_x100) + band,
                                  SETT_SB_PH_LO: int(target_ph_x100) - band})

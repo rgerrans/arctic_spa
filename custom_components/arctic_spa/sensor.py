@@ -126,6 +126,9 @@ async def async_setup_entry(
                  state_class=SensorStateClass.MEASUREMENT),
     ]
 
+    # SpaBoy activity (Producing / Idle) — matches Customer Portal tooltip
+    entities += [_SpaBoyActivity(coordinator, entry)]
+
     # Info sensors
     entities += [
         _Info(coordinator, entry, "Spa Serial Number", "spa_serial",
@@ -259,6 +262,27 @@ class _Battery(_Base):
 class _DiagBattery(_Battery):
     _attr_entity_category = "diagnostic"
     _attr_entity_registry_enabled_default = False
+
+
+class _SpaBoyActivity(_Base):
+    """Text sensor mirroring Customer Portal's 'Producing' / 'Idle' indicator."""
+
+    _attr_icon = "mdi:flask-empty-plus-outline"
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry, "SpaBoy Activity", "spaboy_activity")
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        if not self.coordinator.data:
+            return True
+        return bool(self.coordinator.data.cfg_spaboy)
+
+    @property
+    def native_value(self):
+        if not self.coordinator.data or not self.coordinator.data.sb_present:
+            return None
+        return "Producing" if self.coordinator.data.sb_producing else "Idle"
 
 
 class _Info(_Base):

@@ -93,6 +93,9 @@ class ArcticSpaCoordinator(DataUpdateCoordinator[SpaStatus]):
     async def async_set_chlorine_band(self, target_orp: int, band: int = 5) -> bool:
         return await self.client.async_set_chlorine_band(target_orp, band)
 
+    async def async_set_chlorine_level(self, lo: int, hi: int) -> bool:
+        return await self.client.async_set_chlorine_level(lo, hi)
+
     async def async_set_ph_band(self, target_ph_x100: int, band: int = 5) -> bool:
         return await self.client.async_set_ph_band(target_ph_x100, band)
 

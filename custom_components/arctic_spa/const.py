@@ -236,6 +236,15 @@ SB_PH_BAND_LABELS = {
     4: "Very High", # >8.2
 }
 
+# Chlorine production presets per Customer Portal SpaBoy.tsx orpLevelMapper.
+# Each preset is (SBORPlo, SBORPhi). When the user picks a level the portal
+# also resets SBHr to 0 (likely meaning "auto duty cycle" for that band).
+CHLORINE_LEVEL_PRESETS = {
+    "Low":    (545, 555),  # ~550 mV target
+    "Medium": (645, 655),  # ~650 mV target
+    "High":   (745, 755),  # ~750 mV target
+}
+
 # SmartPH state machine (live.phSM) — from upstream smartPhState.enums.ts
 SMARTPH_LABELS = {
     0: "Idle",
