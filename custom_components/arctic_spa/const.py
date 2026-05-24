@@ -135,6 +135,12 @@ CMD_SET_FF = "setFF"
 CMD_SET_FD = "setFD"
 CMD_SET_FS = "setFS"
 CMD_SET_SB_HRS = "setSBHrs"
+# RDT light write keys differ from read keys (read = bare, write = set-prefixed).
+CMD_SET_RDT_RED = "setRDTred"
+CMD_SET_RDT_GREEN = "setRDTgreen"
+CMD_SET_RDT_BLUE = "setRDTblue"
+CMD_SET_RDT_BRIGHT = "setRDTbright"
+CMD_SET_RDT_PATTERN = "setRDTpattern"
 CMD_SET_ON_HR = "setOnHr"
 CMD_SET_ON_CY = "setOnCy"
 CMD_SET_OZ_HR = "setOzHr"
@@ -190,6 +196,32 @@ SPA_STATUS_LABELS = {
     61: "PCBID2",
     62: "PCBID3",
     63: "PCBID4",
+}
+
+# RDT light patterns — names per Customer Portal LightsDialog.tsx (only 4 defined)
+RDT_PATTERN_NAMES = {
+    0: "Solid",
+    1: "Fade In",
+    2: "Blinking",
+    3: "Spectrum",
+}
+
+# SpaBoy ORP band labels — per Customer Portal SpaBoy.tsx tooltip ppm ranges (sbORPind 0-4)
+SB_ORP_BAND_LABELS = {
+    0: "Low (<0.1 ppm)",
+    1: "0.1-0.5 ppm",
+    2: "OK (0.6-1.5 ppm)",
+    3: "1.6-3.0 ppm",
+    4: "High (>3.0 ppm)",
+}
+
+# SpaBoy pH band labels — per Customer Portal SpaBoy.tsx tooltip ranges (sbpHind 0-4)
+SB_PH_BAND_LABELS = {
+    0: "Low (<6.8)",
+    1: "6.8-7.2",
+    2: "OK (7.3-7.8)",
+    3: "7.9-8.2",
+    4: "High (>8.2)",
 }
 
 # SmartPH state machine (live.phSM) — from upstream smartPhState.enums.ts

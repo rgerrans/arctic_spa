@@ -29,6 +29,11 @@ from .const import (
     CMD_SET_FD,
     CMD_SET_FF,
     CMD_SET_FS,
+    CMD_SET_RDT_BLUE,
+    CMD_SET_RDT_BRIGHT,
+    CMD_SET_RDT_GREEN,
+    CMD_SET_RDT_PATTERN,
+    CMD_SET_RDT_RED,
     CMD_SET_SB_HRS,
     CMD_SET_TSP,
     CMD_YESS_NEXT,
@@ -731,12 +736,15 @@ class ArcticSpaClient:
     async def async_set_rdt(self, *, red: int | None = None, green: int | None = None,
                             blue: int | None = None, brightness: int | None = None,
                             pattern: int | None = None) -> bool:
+        # Write keys for RDT lights use the set-prefixed form per LightsDialog.tsx:
+        # setRDTred / setRDTgreen / setRDTblue / setRDTbright / setRDTpattern.
+        # The read keys (RDT_red etc.) are different — read vs write asymmetry.
         payload: dict[str, int] = {}
-        if red is not None: payload[SETT_RDT_RED] = max(0, min(int(red), 255))
-        if green is not None: payload[SETT_RDT_GREEN] = max(0, min(int(green), 255))
-        if blue is not None: payload[SETT_RDT_BLUE] = max(0, min(int(blue), 255))
-        if brightness is not None: payload[SETT_RDT_BRIGHT] = max(0, min(int(brightness), 255))
-        if pattern is not None: payload[SETT_RDT_PATTERN] = int(pattern)
+        if red is not None: payload[CMD_SET_RDT_RED] = max(0, min(int(red), 255))
+        if green is not None: payload[CMD_SET_RDT_GREEN] = max(0, min(int(green), 255))
+        if blue is not None: payload[CMD_SET_RDT_BLUE] = max(0, min(int(blue), 255))
+        if brightness is not None: payload[CMD_SET_RDT_BRIGHT] = max(0, min(int(brightness), 255))
+        if pattern is not None: payload[CMD_SET_RDT_PATTERN] = int(pattern)
         if not payload:
             return False
         return await self._send(payload)

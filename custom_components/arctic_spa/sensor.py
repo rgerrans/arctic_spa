@@ -28,6 +28,8 @@ from .const import (
     DOMAIN,
     FilterStatus,
     HeaterStatus,
+    SB_ORP_BAND_LABELS,
+    SB_PH_BAND_LABELS,
     SMARTPH_LABELS,
 )
 from .coordinator import ArcticSpaCoordinator
@@ -50,7 +52,7 @@ async def async_setup_entry(
               lambda d: d.setpoint_f),
         _Temp(coordinator, entry, temp_unit, "Heater Temperature", "heater_temperature",
               lambda d: d.heater_temp),
-        _Status(coordinator, entry, "Heater Status", "heater_status", _HEATER_MAP,
+        _Status(coordinator, entry, "Heater 1 Status", "heater_status", _HEATER_MAP,
                 lambda d: d.heater1, icon="mdi:water-boiler"),
         _Status(coordinator, entry, "Heater 2 Status", "heater2_status", _HEATER_MAP,
                 lambda d: d.heater2, icon="mdi:water-boiler"),
@@ -227,6 +229,8 @@ class _Info(_Base):
 
 
 class _PhStatus(_Base):
+    """pH status using firmware's sbpHind banding (0-4) per Customer Portal."""
+
     _attr_icon = "mdi:test-tube"
 
     def __init__(self, coordinator, entry) -> None:
@@ -236,13 +240,23 @@ class _PhStatus(_Base):
     def native_value(self):
         if not self.coordinator.data or self.coordinator.data.sb_ph <= 0:
             return None
-        ph = self.coordinator.data.sb_ph / 100.0
-        if ph < 7.2: return "Low"
-        if ph > 7.8: return "High"
-        return "OK"
+        # Clamp index to 4 since firmware sometimes returns >4 (treat as upper extreme)
+        idx = min(max(self.coordinator.data.sb_ph_indicator, 0), 4)
+        return SB_PH_BAND_LABELS.get(idx, f"Band {idx}")
+
+    @property
+    def extra_state_attributes(self):
+        if not self.coordinator.data:
+            return {}
+        return {
+            "indicator": self.coordinator.data.sb_ph_indicator,
+            "ph": round(self.coordinator.data.sb_ph / 100.0, 2) if self.coordinator.data.sb_ph else None,
+        }
 
 
 class _OrpStatus(_Base):
+    """Chlorine ORP status using firmware's sbORPind banding (0-4) per Customer Portal."""
+
     _attr_icon = "mdi:test-tube"
 
     def __init__(self, coordinator, entry) -> None:
@@ -252,10 +266,17 @@ class _OrpStatus(_Base):
     def native_value(self):
         if not self.coordinator.data or self.coordinator.data.sb_orp <= 0:
             return None
-        orp = self.coordinator.data.sb_orp
-        if orp < 500: return "Low"
-        if orp > 750: return "High"
-        return "OK"
+        idx = min(max(self.coordinator.data.sb_orp_indicator, 0), 4)
+        return SB_ORP_BAND_LABELS.get(idx, f"Band {idx}")
+
+    @property
+    def extra_state_attributes(self):
+        if not self.coordinator.data:
+            return {}
+        return {
+            "indicator": self.coordinator.data.sb_orp_indicator,
+            "orp_mV": self.coordinator.data.sb_orp,
+        }
 
 
 class _Error(_Base):

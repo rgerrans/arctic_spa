@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, PumpStatus
+from .const import DOMAIN, PumpStatus, RDT_PATTERN_NAMES
 from .coordinator import ArcticSpaCoordinator
 
 
@@ -15,9 +15,10 @@ PUMP_OPTIONS = ["Off", "Low", "High"]
 PUMP_FWD = {"Off": PumpStatus.OFF, "Low": PumpStatus.LOW, "High": PumpStatus.HIGH}
 PUMP_REV = {v: k for k, v in PUMP_FWD.items()}
 
-# RDT pattern catalogue — values per Customer Portal LightsDialog. Indexes 0..N.
-# We expose a generic numeric range; the spa's interpretation is firmware-specific.
-RDT_PATTERN_OPTIONS = [str(i) for i in range(16)]
+# RDT pattern names per Customer Portal LightsDialog.tsx (only 4 exist):
+#   0=Solid, 1=Fade In, 2=Blinking, 3=Spectrum
+RDT_PATTERN_OPTIONS = list(RDT_PATTERN_NAMES.values())
+RDT_PATTERN_FWD = {name: idx for idx, name in RDT_PATTERN_NAMES.items()}
 
 
 async def async_setup_entry(
@@ -118,12 +119,10 @@ class _RdtPatternSelect(_BaseSelect):
     def current_option(self):
         if not self.coordinator.data:
             return None
-        v = self.coordinator.data.rdt_pattern
-        opt = str(v)
-        return opt if opt in self._attr_options else None
+        return RDT_PATTERN_NAMES.get(self.coordinator.data.rdt_pattern)
 
     async def async_select_option(self, option: str) -> None:
-        try:
-            await self.coordinator.async_set_rdt(pattern=int(option))
-        except ValueError:
+        idx = RDT_PATTERN_FWD.get(option)
+        if idx is None:
             return
+        await self.coordinator.async_set_rdt(pattern=idx)
