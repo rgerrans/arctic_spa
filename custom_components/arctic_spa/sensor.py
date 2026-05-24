@@ -10,6 +10,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    EntityCategory,
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
@@ -250,7 +251,7 @@ class _Numeric(_Base):
 
 class _Diag(_Numeric):
     """Same as _Numeric but in the diagnostic entity category (disabled by default)."""
-    _attr_entity_category = "diagnostic"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
 
@@ -272,7 +273,7 @@ class _Battery(_Base):
 
 
 class _DiagBattery(_Battery):
-    _attr_entity_category = "diagnostic"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
 
@@ -338,7 +339,7 @@ class _FilterTag(_Base):
     """
 
     _attr_icon = "mdi:tag"
-    _attr_entity_category = "diagnostic"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry, num: int) -> None:
@@ -358,7 +359,7 @@ class _Info(_Base):
         super().__init__(coordinator, entry, name, key)
         self._getter = getter
         self._attr_icon = icon
-        self._attr_entity_category = "diagnostic"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self):
@@ -490,7 +491,7 @@ class _SmartPhState(_Base):
 
 class _SpaBoyStateMachine(_Base):
     _attr_icon = "mdi:state-machine"
-    _attr_entity_category = "diagnostic"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator, entry) -> None:
         super().__init__(coordinator, entry, "SpaBoy State Machine", "spaboy_state_machine")

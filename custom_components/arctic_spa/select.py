@@ -16,6 +16,7 @@ from .const import (
     RDT_PATTERN_NAMES,
 )
 from .coordinator import ArcticSpaCoordinator
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 
 
@@ -203,7 +204,7 @@ class _FilterLifespanSelect(CoordinatorEntity[ArcticSpaCoordinator], SelectEntit
     _attr_has_entity_name = True
     _attr_options = list(FILTER_LIFESPAN_OPTIONS.keys())
     _attr_icon = "mdi:calendar-refresh"
-    _attr_entity_category = "config"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator, entry) -> None:
         super().__init__(coordinator)
