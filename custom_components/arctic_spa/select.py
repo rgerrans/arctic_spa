@@ -121,7 +121,7 @@ class _RdtPatternSelect(_BaseSelect):
     _attr_icon = "mdi:animation"
 
     def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "Lights Pattern", "rdt_pattern")
+        super().__init__(coordinator, entry, "Cabinet Light Pattern", "rdt_pattern")
 
     @property
     def entity_registry_enabled_default(self) -> bool:
