@@ -127,9 +127,12 @@ class _AlarmBool(_BaseBin):
     def extra_state_attributes(self):
         if not self.coordinator.data:
             return {}
+        d = self.coordinator.data
         return {
-            "active_codes": list(self.coordinator.data.active_statuses),
-            "alarm_message": self.coordinator.data.alarm_message,
+            "active_codes": list(d.active_statuses),
+            "alarm_message": d.alarm_message,
+            "informational_codes": list(d.informational_statuses),
+            "informational_message": d.informational_status_message,
         }
 
 

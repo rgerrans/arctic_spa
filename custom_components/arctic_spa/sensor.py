@@ -335,9 +335,14 @@ class _Alarm(_Base):
     def extra_state_attributes(self):
         if not self.coordinator.data:
             return {}
+        d = self.coordinator.data
         return {
-            "active_codes": list(self.coordinator.data.active_statuses),
-            "count": len(self.coordinator.data.active_statuses),
+            "active_codes": list(d.active_statuses),
+            "count": len(d.active_statuses),
+            "informational_codes": list(d.informational_statuses),
+            "informational_message": d.informational_status_message,
+            "pcb_revision": d.pcb_revision,
+            "target_temperature_reached": d.target_temperature_reached,
         }
 
 

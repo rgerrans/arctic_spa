@@ -115,6 +115,7 @@ from .const import (
     SETT_TSP_READ,
     SMARTPH_LABELS,
     SPA_ERROR_LABELS,
+    SPA_STATUS_INFORMATIONAL,
     SPA_STATUS_LABELS,
     WS_PATH,
 )
@@ -191,9 +192,10 @@ class SpaStatus:
     heater_temp: int = 0
     # Error/status (rebuilt from ERR0..ERR63 / STAT0..STAT63 boolean dict)
     error: int = 0  # first active labeled ERR index, 0 = none
-    alarm: int = 0  # first active labeled STAT index, 0 = none
+    alarm: int = 0  # first active alarm-worthy STAT index, 0 = none
     active_errors: list[int] = field(default_factory=list)
-    active_statuses: list[int] = field(default_factory=list)
+    active_statuses: list[int] = field(default_factory=list)  # alarm-worthy only
+    informational_statuses: list[int] = field(default_factory=list)  # PCBID, target reached
     # State machines
     smartph_state: int = 0
     spaboy_state_machine: int = 0
@@ -302,6 +304,24 @@ class SpaStatus:
         if not self.active_statuses:
             return "No Alarm"
         return ", ".join(SPA_STATUS_LABELS.get(i, f"STAT{i}") for i in self.active_statuses)
+
+    @property
+    def informational_status_message(self) -> str:
+        if not self.informational_statuses:
+            return "None"
+        return ", ".join(SPA_STATUS_LABELS.get(i, f"STAT{i}") for i in self.informational_statuses)
+
+    @property
+    def pcb_revision(self) -> int | None:
+        """Returns the PCB revision number (0-4) from active PCBID STATs, or None."""
+        for i in (59, 60, 61, 62, 63):
+            if i in self.informational_statuses:
+                return i - 59
+        return None
+
+    @property
+    def target_temperature_reached(self) -> bool:
+        return 17 in self.informational_statuses
 
     @property
     def smartph_state_label(self) -> str:
@@ -637,11 +657,17 @@ class ArcticSpaClient:
         s.error = s.active_errors[0] if s.active_errors else 0
 
     def _apply_status(self, d: dict) -> None:
-        """Status topic: {STAT0:bool,...,STAT63:bool, Lower_STAT_Word:hex, Upper_STAT_Word:hex}."""
+        """Status topic: {STAT0:bool,...,STAT63:bool, Lower_STAT_Word:hex, Upper_STAT_Word:hex}.
+
+        Splits codes into alarm-worthy (active_statuses) vs informational
+        (informational_statuses). PCBID0-4 + TARGET TEMPERATURE REACHED are
+        normal operational signals and don't belong on the alarm sensor.
+        """
         s = self._status
         if not isinstance(d, dict):
             return
         active_stats: list[int] = []
+        info_stats: list[int] = []
         for k, v in d.items():
             if not v or not isinstance(k, str) or not k.startswith("STAT"):
                 continue
@@ -649,9 +675,14 @@ class ArcticSpaClient:
                 idx = int(k[4:])
             except ValueError:
                 continue
-            if idx in SPA_STATUS_LABELS:
+            if idx not in SPA_STATUS_LABELS:
+                continue
+            if idx in SPA_STATUS_INFORMATIONAL:
+                info_stats.append(idx)
+            else:
                 active_stats.append(idx)
         s.active_statuses = sorted(active_stats)
+        s.informational_statuses = sorted(info_stats)
         s.alarm = s.active_statuses[0] if s.active_statuses else 0
 
     async def _send(self, payload: dict) -> bool:

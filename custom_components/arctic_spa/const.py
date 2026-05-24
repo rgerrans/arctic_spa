@@ -204,6 +204,11 @@ SPA_STATUS_LABELS = {
     63: "PCBID4",
 }
 
+# Codes that surface as STAT but are NOT problems — exclude from alarm sensor.
+# - 17 "TARGET TEMPERATURE REACHED": informational (good news)
+# - 59-63 "PCBID0..4": board-revision identifier, exactly one is always set
+SPA_STATUS_INFORMATIONAL = {17, 59, 60, 61, 62, 63}
+
 # RDT light patterns — names per Customer Portal LightsDialog.tsx (only 4 defined)
 RDT_PATTERN_NAMES = {
     0: "Solid",
