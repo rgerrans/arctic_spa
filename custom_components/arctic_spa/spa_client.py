@@ -216,9 +216,9 @@ class SpaStatus:
     sb_status: int = 0
     sb_ph_indicator: int = 0
     sb_orp_indicator: int = 0
-    sb_wear_pct: int = 0
-    sb_wear_e1_pct: int = 0
-    sb_wear_e2_pct: int = 0
+    sb_life_remaining_pct: int = 0       # field name 'sbWear' — actually remaining capacity, not wear
+    sb_life_remaining_e1_pct: int = 0    # per-electrode (within single cell — bipolar plates)
+    sb_life_remaining_e2_pct: int = 0
     sb_e1_pos: int = 0
     sb_e1_neg: int = 0
     sb_e2_pos: int = 0
@@ -585,9 +585,14 @@ class ArcticSpaClient:
         if LIVE_SB_STAT in d: s.sb_status = _int(d[LIVE_SB_STAT])
         if LIVE_SB_PH_IND in d: s.sb_ph_indicator = _int(d[LIVE_SB_PH_IND])
         if LIVE_SB_ORP_IND in d: s.sb_orp_indicator = _int(d[LIVE_SB_ORP_IND])
-        if LIVE_SB_WEAR in d: s.sb_wear_pct = _int(d[LIVE_SB_WEAR])
-        if LIVE_SB_WEAR_E1 in d: s.sb_wear_e1_pct = _int(d[LIVE_SB_WEAR_E1])
-        if LIVE_SB_WEAR_E2 in d: s.sb_wear_e2_pct = _int(d[LIVE_SB_WEAR_E2])
+        # Field 'sbWear' is REMAINING capacity (high = fresh, low = needs replacement),
+        # not wear consumed. Confirmed by Customer Portal CSS bands: <=20 worst,
+        # >80 best. Aggregate value; sbWearE1/E2 are per-plate inside the single
+        # bipolar cell (chlorinators have one cell with two electrode plates that
+        # alternate polarity to prevent scaling).
+        if LIVE_SB_WEAR in d: s.sb_life_remaining_pct = _int(d[LIVE_SB_WEAR])
+        if LIVE_SB_WEAR_E1 in d: s.sb_life_remaining_e1_pct = _int(d[LIVE_SB_WEAR_E1])
+        if LIVE_SB_WEAR_E2 in d: s.sb_life_remaining_e2_pct = _int(d[LIVE_SB_WEAR_E2])
         if LIVE_SB_E1P in d: s.sb_e1_pos = _int(d[LIVE_SB_E1P])
         if LIVE_SB_E1N in d: s.sb_e1_neg = _int(d[LIVE_SB_E1N])
         if LIVE_SB_E2P in d: s.sb_e2_pos = _int(d[LIVE_SB_E2P])

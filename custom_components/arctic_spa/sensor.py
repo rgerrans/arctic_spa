@@ -100,15 +100,18 @@ async def async_setup_entry(
                  lambda d: d.sb_current_2 if d.sb_present else None,
                  unit=UnitOfElectricCurrent.AMPERE, device_class=SensorDeviceClass.CURRENT,
                  state_class=SensorStateClass.MEASUREMENT),
-        _Numeric(coordinator, entry, "SpaBoy Cell Wear", "spaboy_wear", "mdi:battery-50",
-                 lambda d: d.sb_wear_pct if d.sb_present else None,
+        _Numeric(coordinator, entry, "SpaBoy Cell Life Remaining", "spaboy_wear",
+                 "mdi:battery-high",
+                 lambda d: d.sb_life_remaining_pct if d.sb_present else None,
                  unit=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
-        _Numeric(coordinator, entry, "SpaBoy Electrode 1 Wear", "spaboy_wear_e1", "mdi:battery-50",
-                 lambda d: d.sb_wear_e1_pct if d.sb_present else None,
-                 unit=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
-        _Numeric(coordinator, entry, "SpaBoy Electrode 2 Wear", "spaboy_wear_e2", "mdi:battery-50",
-                 lambda d: d.sb_wear_e2_pct if d.sb_present else None,
-                 unit=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
+        _Diag(coordinator, entry, "SpaBoy Electrode 1 Life Remaining", "spaboy_wear_e1",
+              "mdi:battery-medium",
+              lambda d: d.sb_life_remaining_e1_pct if d.sb_present else None,
+              unit=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
+        _Diag(coordinator, entry, "SpaBoy Electrode 2 Life Remaining", "spaboy_wear_e2",
+              "mdi:battery-medium",
+              lambda d: d.sb_life_remaining_e2_pct if d.sb_present else None,
+              unit=PERCENTAGE, state_class=SensorStateClass.MEASUREMENT),
         _Numeric(coordinator, entry, "SpaBoy Status Code", "spaboy_status_code", "mdi:numeric",
                  lambda d: d.sb_status if d.sb_present else None),
         _Numeric(coordinator, entry, "SpaBoy Electrode 1 Positive", "spaboy_e1_pos",
@@ -234,6 +237,12 @@ class _Numeric(_Base):
         if not self.coordinator.data:
             return None
         return self._getter(self.coordinator.data)
+
+
+class _Diag(_Numeric):
+    """Same as _Numeric but in the diagnostic entity category (disabled by default)."""
+    _attr_entity_category = "diagnostic"
+    _attr_entity_registry_enabled_default = False
 
 
 class _Info(_Base):
