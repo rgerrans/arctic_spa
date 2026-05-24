@@ -212,22 +212,23 @@ RDT_PATTERN_NAMES = {
     3: "Spectrum",
 }
 
-# SpaBoy ORP band labels — per Customer Portal SpaBoy.tsx tooltip ppm ranges (sbORPind 0-4)
+# SpaBoy ORP indicator bands (sbORPind 0-4). Raw value + ppm range live in
+# the entity's extra_state_attributes; pH Level / ORP sensors carry the literal.
 SB_ORP_BAND_LABELS = {
-    0: "Low (<0.1 ppm)",
-    1: "0.1-0.5 ppm",
-    2: "OK (0.6-1.5 ppm)",
-    3: "1.6-3.0 ppm",
-    4: "High (>3.0 ppm)",
+    0: "Very Low",  # <0.1 ppm
+    1: "Low",       # 0.1-0.5 ppm
+    2: "OK",        # 0.6-1.5 ppm
+    3: "High",      # 1.6-3.0 ppm
+    4: "Very High", # >3.0 ppm
 }
 
-# SpaBoy pH band labels — per Customer Portal SpaBoy.tsx tooltip ranges (sbpHind 0-4)
+# SpaBoy pH indicator bands (sbpHind 0-4).
 SB_PH_BAND_LABELS = {
-    0: "Low (<6.8)",
-    1: "6.8-7.2",
-    2: "OK (7.3-7.8)",
-    3: "7.9-8.2",
-    4: "High (>8.2)",
+    0: "Very Low",  # <6.8
+    1: "Low",       # 6.8-7.2
+    2: "OK",        # 7.3-7.8
+    3: "High",      # 7.9-8.2
+    4: "Very High", # >8.2
 }
 
 # SmartPH state machine (live.phSM) — from upstream smartPhState.enums.ts
