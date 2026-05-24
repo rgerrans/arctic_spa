@@ -6,7 +6,13 @@
         "description": "Set up your Arctic Spa hot tub.",
         "data": {
           "host": "IP Address",
-          "temperature_unit": "Temperature Unit"
+          "temperature_unit": "Temperature Unit",
+          "name": "Entity name string root"
+        },
+        "data_description": {
+          "host": "Spa controller's local IP (DHCP-reserve it for stability).",
+          "temperature_unit": "Display unit for temperature sensors (does not change the spa's internal setting).",
+          "name": "Used as the prefix for every entity ID this integration creates. Default 'arctic_spa' → sensor.arctic_spa_water_temperature etc. Use snake_case. Cannot be changed without deleting and re-adding the integration."
         }
       }
     },

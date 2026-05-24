@@ -6,7 +6,13 @@
         "description": "Set up your Arctic Spa hot tub.",
         "data": {
           "host": "IP Address",
-          "temperature_unit": "Temperature Unit"
+          "temperature_unit": "Temperature Unit",
+          "name": "Entity name string root"
+        },
+        "data_description": {
+          "host": "Spa controller's local IP (DHCP-reserve it for stability).",
+          "temperature_unit": "Display unit for temperature sensors (does not change the spa's internal setting).",
+          "name": "Used as the prefix for every entity ID this integration creates. Default 'arctic_spa' → sensor.arctic_spa_water_temperature etc. Use snake_case. Cannot be changed without deleting and re-adding the integration."
         }
       }
     },
@@ -25,75 +31,6 @@
         "data": {
           "temperature_unit": "Temperature Unit"
         }
-      }
-    }
-  },
-  "entity": {
-    "climate": {
-      "spa": {
-        "name": "Spa"
-      }
-    },
-    "sensor": {
-      "temperature": {
-        "name": "Water Temperature"
-      },
-      "setpoint": {
-        "name": "Target Temperature"
-      },
-      "heater_status": {
-        "name": "Heater Status"
-      },
-      "filter_status": {
-        "name": "Filter Status"
-      },
-      "ph": {
-        "name": "pH Level"
-      },
-      "orp": {
-        "name": "ORP (Chlorine)"
-      }
-    },
-    "binary_sensor": {
-      "heater_active": {
-        "name": "Heater Active"
-      },
-      "connected": {
-        "name": "Connected"
-      },
-      "boost_active": {
-        "name": "Boost Active"
-      },
-      "onzen_active": {
-        "name": "Onzen Active"
-      },
-      "economy_mode": {
-        "name": "Economy Mode"
-      }
-    },
-    "switch": {
-      "lights": {
-        "name": "Lights"
-      },
-      "boost": {
-        "name": "Spa Boost"
-      },
-      "onzen_switch": {
-        "name": "Onzen"
-      }
-    },
-    "select": {
-      "pump1": {
-        "name": "Pump 1"
-      },
-      "pump2": {
-        "name": "Pump 2"
-      },
-      "pump3": {
-        "name": "Pump 3"
-      },
-      "blower1": {
-        "name": "Blower 1"
       }
     }
   }

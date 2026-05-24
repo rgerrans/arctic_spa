@@ -32,10 +32,10 @@ talks the new protocol and substantially extends the entity coverage.
 6. Fill in the three fields:
    - **Host** — your spa's IP (e.g. `192.168.100.35`). DHCP-reserve it for stability.
    - **Temperature unit** — F or C; affects sensor unit only, not the spa itself.
-   - **Device name** — controls the entity_id prefix root for every entity
-     created. Default `Arctic Spa` → entity_ids like `sensor.arctic_spa_*`.
-     Pick `Hot Tub` → entity_ids like `sensor.hot_tub_*`. Can't change later
-     without deleting and re-adding the integration.
+   - **Entity name string root** — literal entity_id prefix for every entity
+     created. Default `arctic_spa` → entity_ids like `sensor.arctic_spa_*`.
+     Pick `hot_tub` → entity_ids like `sensor.hot_tub_*`. Use snake_case.
+     Cannot be changed later without deleting and re-adding the integration.
 
 ---
 

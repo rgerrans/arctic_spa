@@ -9,7 +9,7 @@ CONF_NAME = "name"
 
 DEFAULT_PORT = 8765
 DEFAULT_TEMP_UNIT = "F"
-DEFAULT_NAME = "Arctic Spa"
+DEFAULT_NAME = "arctic_spa"  # literal entity-id prefix root; user-configurable at install
 WS_PATH = "/"
 
 BOOTSTRAP_QUERY = {"query": 0}
