@@ -129,6 +129,14 @@ async def async_setup_entry(
     # SpaBoy activity (Producing / Idle) — matches Customer Portal tooltip
     entities += [_SpaBoyActivity(coordinator, entry)]
 
+    # Filter cartridge status — matches Customer Portal Filtration tab text labels
+    entities += [
+        _FilterStatus(coordinator, entry, 1),
+        _FilterStatus(coordinator, entry, 2),
+        _FilterTag(coordinator, entry, 1),  # diagnostic, disabled by default
+        _FilterTag(coordinator, entry, 2),
+    ]
+
     # Info sensors
     entities += [
         _Info(coordinator, entry, "Spa Serial Number", "spa_serial",
@@ -283,6 +291,53 @@ class _SpaBoyActivity(_Base):
         if not self.coordinator.data or not self.coordinator.data.sb_present:
             return None
         return "Producing" if self.coordinator.data.sb_producing else "Idle"
+
+
+class _FilterStatus(_Base):
+    """Text sensor mirroring Customer Portal Filtration tab labels: 'Good' / 'No Filter Present'."""
+
+    _attr_icon = "mdi:air-filter"
+
+    def __init__(self, coordinator, entry, num: int) -> None:
+        self._num = num
+        super().__init__(coordinator, entry, f"Filter {num} Status", f"filter_{num}_status")
+
+    @property
+    def native_value(self):
+        if not self.coordinator.data:
+            return None
+        tag = getattr(self.coordinator.data, f"filter_tag{self._num}", "")
+        return "Good" if tag else "No Filter Present"
+
+    @property
+    def extra_state_attributes(self):
+        if not self.coordinator.data:
+            return {}
+        tag = getattr(self.coordinator.data, f"filter_tag{self._num}", "")
+        return {"tag_id": tag or None}
+
+
+class _FilterTag(_Base):
+    """Raw RFID hex ID of the installed filter cartridge (diagnostic, disabled by default).
+
+    Useful for automations that watch for cartridge changes (TAG ID change → log
+    install date, remind about next change cycle, etc).
+    """
+
+    _attr_icon = "mdi:tag"
+    _attr_entity_category = "diagnostic"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator, entry, num: int) -> None:
+        self._num = num
+        super().__init__(coordinator, entry, f"Filter {num} Tag ID", f"filter_{num}_tag_id")
+
+    @property
+    def native_value(self):
+        if not self.coordinator.data:
+            return None
+        tag = getattr(self.coordinator.data, f"filter_tag{self._num}", "")
+        return tag or None
 
 
 class _Info(_Base):

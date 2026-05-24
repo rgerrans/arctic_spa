@@ -199,9 +199,11 @@ class SpaStatus:
     # State machines
     smartph_state: int = 0
     spaboy_state_machine: int = 0
-    # Filter accessory state
-    filter_tag1: bool = False
-    filter_tag2: bool = False
+    # Filter accessory state. TAG1/TAG2 are RFID hex IDs of installed cartridges
+    # (empty string = no cartridge in that slot). The portal computes
+    # "Good" / "No Filter Present" from truthy-ness of the string.
+    filter_tag1: str = ""
+    filter_tag2: str = ""
     filter_stop_above_3: bool = False  # FS — stop filtering 3F above setpoint
 
     # SpaBoy (Onzen chlorinator)
@@ -610,8 +612,8 @@ class ArcticSpaClient:
         if SETT_FF_READ in d: s.filter_frequency = _int(d[SETT_FF_READ])
         if SETT_FD_READ in d: s.filter_duration = _int(d[SETT_FD_READ])
         if SETT_FS_READ in d: s.filter_stop_above_3 = _bool(d[SETT_FS_READ])
-        if SETT_TAG1 in d: s.filter_tag1 = _bool(d[SETT_TAG1])
-        if SETT_TAG2 in d: s.filter_tag2 = _bool(d[SETT_TAG2])
+        if SETT_TAG1 in d: s.filter_tag1 = str(d[SETT_TAG1] or "")
+        if SETT_TAG2 in d: s.filter_tag2 = str(d[SETT_TAG2] or "")
         if SETT_SB_HR_READ in d: s.spaboy_hours_per_day = _int(d[SETT_SB_HR_READ])
 
         for i, key in enumerate(SETT_CFG_PUMP):
