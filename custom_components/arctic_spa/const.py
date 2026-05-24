@@ -236,6 +236,15 @@ SB_PH_BAND_LABELS = {
     4: "Very High", # >8.2
 }
 
+# Filter replacement-frequency presets (days). User selects one; HA-side
+# calculator decreases filter_X_life_remaining at this cadence.
+FILTER_LIFESPAN_OPTIONS = {
+    "90 days": 90,
+    "180 days": 180,
+    "365 days": 365,
+}
+FILTER_LIFESPAN_DEFAULT = "180 days"
+
 # Chlorine production presets per Customer Portal SpaBoy.tsx orpLevelMapper.
 # Each preset is (SBORPlo, SBORPhi). When the user picks a level the portal
 # also resets SBHr to 0 (likely meaning "auto duty cycle" for that band).

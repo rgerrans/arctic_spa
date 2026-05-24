@@ -25,6 +25,13 @@ class ArcticSpaCoordinator(DataUpdateCoordinator[SpaStatus]):
         )
         self.client = client
         self.client.register_state_callback(self._on_state_change)
+        # HA-side filter life tracking (per-filter installed date + selected lifespan).
+        # Date entity owns installed_date persistence (via RestoreEntity); this
+        # dict is the shared in-memory store accessed by the life-remaining sensor.
+        from datetime import date as _date
+        self.filter_install_dates: dict[int, _date | None] = {1: None, 2: None}
+        self.filter_last_tags: dict[int, str] = {1: "", 2: ""}
+        self.filter_lifespan_days: int = 180  # updated by the lifespan select entity
 
     @callback
     def _on_state_change(self) -> None:

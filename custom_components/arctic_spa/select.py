@@ -7,8 +7,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CHLORINE_LEVEL_PRESETS, DOMAIN, PumpStatus, RDT_PATTERN_NAMES
+from .const import (
+    CHLORINE_LEVEL_PRESETS,
+    DOMAIN,
+    FILTER_LIFESPAN_DEFAULT,
+    FILTER_LIFESPAN_OPTIONS,
+    PumpStatus,
+    RDT_PATTERN_NAMES,
+)
 from .coordinator import ArcticSpaCoordinator
+from homeassistant.helpers.restore_state import RestoreEntity
 
 
 PUMP_OPTIONS = ["Off", "Low", "High"]
@@ -37,6 +45,7 @@ async def async_setup_entry(
         entities.append(_BlowerSelect(coordinator, entry, i))
     entities.append(_RdtPatternSelect(coordinator, entry))
     entities.append(_ChlorineLevelSelect(coordinator, entry))
+    entities.append(_FilterLifespanSelect(coordinator, entry))
     async_add_entities(entities)
 
 
@@ -166,3 +175,43 @@ class _ChlorineLevelSelect(_BaseSelect):
             return
         lo, hi = preset
         await self.coordinator.async_set_chlorine_level(lo, hi)
+
+
+class _FilterLifespanSelect(CoordinatorEntity[ArcticSpaCoordinator], SelectEntity, RestoreEntity):
+    """User-selectable filter cartridge replacement frequency (global, both filters)."""
+
+    _attr_has_entity_name = True
+    _attr_options = list(FILTER_LIFESPAN_OPTIONS.keys())
+    _attr_icon = "mdi:calendar-refresh"
+    _attr_entity_category = "config"
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_filter_lifespan"
+        self._attr_name = "Filter Replacement Frequency"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)},
+            "name": "Arctic Spa",
+            "manufacturer": "Arctic Spas",
+            "model": "Hot Tub",
+        }
+        self._selected: str = FILTER_LIFESPAN_DEFAULT
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and last.state in self._attr_options:
+            self._selected = last.state
+        # Push the active lifespan into the coordinator for the life-remaining sensor
+        self.coordinator.filter_lifespan_days = FILTER_LIFESPAN_OPTIONS[self._selected]
+
+    @property
+    def current_option(self) -> str:
+        return self._selected
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in FILTER_LIFESPAN_OPTIONS:
+            return
+        self._selected = option
+        self.coordinator.filter_lifespan_days = FILTER_LIFESPAN_OPTIONS[option]
+        self.async_write_ha_state()

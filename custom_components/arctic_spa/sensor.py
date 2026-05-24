@@ -136,6 +136,12 @@ async def async_setup_entry(
         _FilterTag(coordinator, entry, 1),
         _FilterTag(coordinator, entry, 2),
     ]
+    # HA-side computed filter life remaining (battery class) — derives from
+    # date.arctic_spa_filter_X_installed_date + selected lifespan.
+    entities += [
+        _FilterLifeRemaining(coordinator, entry, 1),
+        _FilterLifeRemaining(coordinator, entry, 2),
+    ]
 
     # Info sensors
     entities += [
@@ -291,6 +297,39 @@ class _SpaBoyActivity(_Base):
         if not self.coordinator.data or not self.coordinator.data.sb_present:
             return None
         return "Producing" if self.coordinator.data.sb_producing else "Idle"
+
+
+class _FilterLifeRemaining(_Battery):
+    """HA-side computed filter cartridge life remaining as a battery percentage.
+
+    Reads install date from the coordinator (set by the Filter X Installed Date
+    date entity; auto-resets on cartridge tag change) and the user-selected
+    lifespan (Filter Replacement Frequency select). Returns None if no install
+    date or no tag present.
+    """
+
+    def __init__(self, coordinator, entry, num: int) -> None:
+        self._num = num
+        # _Battery requires a getter — pass a dummy; native_value is overridden.
+        super().__init__(coordinator, entry,
+                         f"Filter {num} Life Remaining", f"filter_{num}_life",
+                         lambda d: None)
+
+    @property
+    def native_value(self):
+        from datetime import date as _date
+        installed = self.coordinator.filter_install_dates.get(self._num)
+        if installed is None:
+            return None
+        if not self.coordinator.data:
+            return None
+        tag = getattr(self.coordinator.data, f"filter_tag{self._num}", "")
+        if not tag:
+            return None  # cartridge removed
+        lifespan = max(1, int(self.coordinator.filter_lifespan_days))
+        days_elapsed = (_date.today() - installed).days
+        pct = round(100 * (1 - days_elapsed / lifespan))
+        return max(0, min(100, pct))
 
 
 class _FilterTag(_Base):
