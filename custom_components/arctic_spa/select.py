@@ -130,7 +130,9 @@ class _RdtPatternSelect(_BaseSelect, RestoreEntity):
     _attr_icon = "mdi:animation"
 
     def __init__(self, coordinator, entry) -> None:
-        super().__init__(coordinator, entry, "Spa Light Pattern", "rdt_pattern")
+        # unique_id key 'lights_pattern' (was 'rdt_pattern' through v2.1.9) for
+        # consistency with light.<prefix>_lights / switch.<prefix>_lights slugs.
+        super().__init__(coordinator, entry, "Lights Pattern", "lights_pattern")
         self._selected: str | None = None
 
     async def async_added_to_hass(self) -> None:
