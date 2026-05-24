@@ -40,6 +40,16 @@ class HeaterStatus(IntEnum):
     COOLDOWN = 3
 
 
+# Customer Portal-matching labels for aggregate heat-cycle display
+# (max of H1/H2 → text per heatCycle.enum.ts in the React source).
+HEAT_CYCLE_PORTAL_LABELS = {
+    HeaterStatus.IDLE: "Idle",
+    HeaterStatus.WARMUP: "Heater Warm-Up",
+    HeaterStatus.HEATING: "Heating",
+    HeaterStatus.COOLDOWN: "Heater Cool-Down",
+}
+
+
 class FilterStatus(IntEnum):
     IDLE = 0
     PURGE = 1

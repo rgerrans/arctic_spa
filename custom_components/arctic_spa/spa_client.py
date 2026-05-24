@@ -284,6 +284,11 @@ class SpaStatus:
         return self.heater1 in active or self.heater2 in active
 
     @property
+    def heat_cycle(self) -> HeaterStatus:
+        """Aggregate heat cycle = max(H1, H2). Matches Customer Portal display."""
+        return HeaterStatus(max(self.heater1.value, self.heater2.value))
+
+    @property
     def filter_boost_active(self) -> bool:
         return self.filter_status == FilterStatus.BOOST
 
