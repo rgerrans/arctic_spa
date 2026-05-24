@@ -9,7 +9,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from homeassistant.config_entries import ConfigEntry
 
-from .const import CONF_NAME, DEFAULT_NAME, DOMAIN, FALLBACK_REFRESH_INTERVAL, PumpStatus
+from .const import (
+    CONF_ENTITY_PREFIX,
+    DEFAULT_ENTITY_PREFIX,
+    DOMAIN,
+    FALLBACK_REFRESH_INTERVAL,
+    PumpStatus,
+)
 from .spa_client import ArcticSpaClient, SpaStatus
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,11 +34,12 @@ class ArcticSpaCoordinator(DataUpdateCoordinator[SpaStatus]):
         self.client = client
         self.client.register_state_callback(self._on_state_change)
         # Cached device_info — used by every entity. Built once from the config
-        # entry; the user-chosen device name (CONF_NAME) becomes the entity_id
-        # prefix root for every entity in this integration.
+        # entry; the user-chosen entity prefix becomes the device.name and
+        # therefore the entity_id prefix root for every entity in this
+        # integration.
         self.device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": entry.data.get(CONF_NAME, DEFAULT_NAME),
+            "name": entry.data.get(CONF_ENTITY_PREFIX, DEFAULT_ENTITY_PREFIX),
             "manufacturer": "Arctic Spas",
             "model": "Hot Tub",
         }

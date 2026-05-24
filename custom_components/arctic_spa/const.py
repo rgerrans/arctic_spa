@@ -5,11 +5,15 @@ DOMAIN = "arctic_spa"
 
 CONF_HOST = "host"
 CONF_TEMP_UNIT = "temperature_unit"
-CONF_NAME = "name"
+# Use "entity_prefix" rather than HA's reserved CONF_NAME="name" key — HA's
+# frontend has special-case handling for the "name" key that overrides
+# custom translations, so the field label couldn't be set to anything other
+# than "Name".
+CONF_ENTITY_PREFIX = "entity_prefix"
 
 DEFAULT_PORT = 8765
 DEFAULT_TEMP_UNIT = "F"
-DEFAULT_NAME = "arctic_spa"  # literal entity-id prefix root; user-configurable at install
+DEFAULT_ENTITY_PREFIX = "arctic_spa"  # literal entity-id prefix root
 WS_PATH = "/"
 
 BOOTSTRAP_QUERY = {"query": 0}
