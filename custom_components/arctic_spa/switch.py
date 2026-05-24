@@ -57,9 +57,9 @@ class _LightsSwitch(_BaseSwitch):
 
     @property
     def entity_registry_enabled_default(self) -> bool:
-        if not self.coordinator.data:
-            return True
-        return bool(self.coordinator.data.cfg_lights)
+        # Lights are universal on Arctic Spas — hard-enable to avoid the
+        # cfg-arrival timing race that left the entity disabled at install.
+        return True
 
     @property
     def is_on(self):

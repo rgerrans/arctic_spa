@@ -44,10 +44,10 @@ class _RdtLight(CoordinatorEntity[ArcticSpaCoordinator], LightEntity):
 
     @property
     def entity_registry_enabled_default(self) -> bool:
-        # Lights are universal on Arctic Spas — hard-enable. (Earlier cfg-gating
-        # caused the entity to register as disabled when sett data arrived after
-        # platform forwarding.)
-        return True
+        # Off by default — users who want RGB color + brightness can opt in.
+        # The basic on/off control lives on switch.arctic_spa_lights which is
+        # default-enabled.
+        return False
 
     @property
     def is_on(self) -> bool | None:
