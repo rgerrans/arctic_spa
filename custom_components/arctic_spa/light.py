@@ -29,7 +29,7 @@ async def async_setup_entry(
 
 class _RdtLight(CoordinatorEntity[ArcticSpaCoordinator], LightEntity):
     _attr_has_entity_name = True
-    _attr_name = "Cabinet Lights"
+    _attr_name = "Spa Light"
     _attr_icon = "mdi:led-strip-variant"
     _attr_supported_color_modes = {ColorMode.RGB}
     _attr_color_mode = ColorMode.RGB
