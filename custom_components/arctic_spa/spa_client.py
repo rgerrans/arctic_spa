@@ -726,12 +726,25 @@ class ArcticSpaClient:
         return await self._send({CMD_PUMP_NEXT[pump_num - 1]: 1})
 
     async def async_set_pump(self, pump_num: int, target: PumpStatus) -> bool:
-        """Cycle pump from current state to target."""
+        """Set a pump to the target state.
+
+        Pump 1 is a 3-speed circulation pump (OFF→LOW→HIGH→OFF) — use the
+        standard mod-3 cycle math. Pumps 2-5 are 1-speed jet pumps with a
+        2-state firmware cycle (OFF↔HIGH); sending two PNnext commands in
+        rapid succession would toggle them OFF→HIGH→OFF (visible symptom:
+        the pump turns on then immediately back off). Send exactly one
+        PNnext when current and target differ, treating any non-OFF state
+        as ON.
+        """
         if not 1 <= pump_num <= 5:
             return False
         current = (self._status.pump1, self._status.pump2, self._status.pump3,
                    self._status.pump4, self._status.pump5)[pump_num - 1]
-        return await self._cycle_to(target.value, current.value, lambda: self.async_cycle_pump(pump_num))
+        if pump_num == 1:
+            return await self._cycle_to(target.value, current.value, lambda: self.async_cycle_pump(pump_num))
+        if (current == PumpStatus.OFF) == (target == PumpStatus.OFF):
+            return True
+        return await self.async_cycle_pump(pump_num)
 
     async def async_cycle_blower(self, blower_num: int) -> bool:
         if not 1 <= blower_num <= 2:
